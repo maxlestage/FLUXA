@@ -13,6 +13,9 @@ public enum NetworkKind: String, Codable, CaseIterable, Sendable {
 /// La famille d'une interface réseau.
 public enum InterfaceClass: String, Codable, CaseIterable, Sendable {
     case wifi, cellular, wired, other
+    /// Le pont du partage de connexion vers les appareils reliés. Il ne porte pas le
+    /// trafic Internet de l'iPhone : le moteur le suit à part (voir `Plan.swift`).
+    case sharing
 }
 
 /// La largeur des compteurs d'octets fournis par le système. Un compteur de 32 bits
@@ -397,5 +400,7 @@ public enum FluxaError: Error, Equatable, Sendable {
     case invalidRule(String)
     /// Un appareil du registre refusé, avec la raison en français.
     case invalidDevice(String)
+    /// Un forfait refusé, avec la raison en français.
+    case invalidPlan(String)
     case store(String)
 }

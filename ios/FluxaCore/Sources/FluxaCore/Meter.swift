@@ -36,6 +36,9 @@ struct InterfaceMeter {
         self.width = width
     }
 
+    /// La date du dernier relevé intégré. `nil` : le prochain servira de base.
+    var lastDate: Date? { previousDate }
+
     mutating func reset() {
         previous.removeAll()
         previousDate = nil

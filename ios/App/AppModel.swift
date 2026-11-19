@@ -5,7 +5,11 @@ import Observation
 /// L'état de l'app : il relie le moteur aux services du système et aux écrans.
 ///
 /// Chaque seconde, au premier plan, il relève les compteurs des interfaces et les donne
-/// au moteur. Toutes les cinq secondes, il lance une sonde de latence.
+/// au moteur. Toutes les cinq secondes, il lance une sonde de latence ; moins souvent en
+/// mode économie d'énergie ou données réduites.
+///
+/// Une propriété observée n'est réécrite que si sa valeur change : les écrans qui la
+/// lisent ne se redessinent pas pour rien.
 @MainActor
 @Observable
 final class AppModel {
@@ -16,6 +20,8 @@ final class AppModel {
     private var sampling: Task<Void, Never>?
     private var ticks = 0
     private var probing = false
+    /// L'heure de démarrage de l'iPhone, lue à chaque reprise de la mesure.
+    private var bootTime: Date?
 
     private(set) var snapshot = NetworkSnapshot()
     private(set) var samples: [ThroughputSample] = []
@@ -26,8 +32,16 @@ final class AppModel {
     private(set) var lastApply: ApplyResult?
     /// Change à chaque écriture dans l'historique, pour que les écrans le relisent.
     private(set) var historyRevision = 0
-    /// Un signe indirect que le partage de connexion est en service (voir `InterfaceCounters`).
-    private(set) var sharingDetected = false
+    /// Le partage de connexion en cours, d'après l'interface de pont du système : un
+    /// signe indirect, qui peut manquer (voir `InterfaceCounters`).
+    private(set) var sharing: SharingStatus?
+    private(set) var sharingSessions: [SharingSession] = []
+    /// Ce qui a été échangé pendant que l'app ne mesurait pas, à la dernière reprise.
+    private(set) var absence: AbsenceUsage?
+    /// Le forfait mobile et son état. `nil` : pas de forfait réglé.
+    private(set) var plan: PlanStatus?
+    /// L'intervalle entre deux sondes de latence, en secondes.
+    private(set) var probeInterval = AppModel.probeIntervals.normal
     private(set) var rules: [AutomationRule] = []
     private(set) var automationEvents: [AutomationEvent] = []
     private(set) var speedTests: [SpeedTestResult] = []
@@ -51,6 +65,9 @@ final class AppModel {
     }
 
     static let defaultLatencyHost = "www.apple.com"
+    /// Secondes entre deux sondes : en temps normal, en mode économie d'énergie, et en
+    /// mode données réduites.
+    static let probeIntervals = (normal: 5, lowPower: 15, lowData: 30)
     private static let latencyHostKey = "latencyHost"
     private static let notifiesKey = "notifiesAutomations"
     private static let speedTestServerKey = "speedTestServer"
@@ -66,6 +83,8 @@ final class AppModel {
         refreshAutomations()
         speedTests = engine.speedTests
         devices = engine.devices
+        sharingSessions = engine.sharingSessions(limit: Self.sharingSessionLimit)
+        plan = engine.planStatus()
         snapshot = engine.snapshot
         // Un souci à l'ouverture de la base est dit dès le premier écran.
         errorMessage = opened.problem
@@ -99,6 +118,10 @@ final class AppModel {
         profiles.first { $0.id == activeProfileID }
     }
 
+    var sharingDetected: Bool { sharing != nil }
+
+    private static let sharingSessionLimit = 10
+
     var capabilities: [CapabilityStatus] { engine.capabilities }
     var capabilitiesJSON: String { engine.capabilitiesJSON() }
     var diagnostics: Diagnostics { engine.diagnostics() }
@@ -107,6 +130,7 @@ final class AppModel {
 
     func start() {
         guard sampling == nil else { return }
+        bootTime = InterfaceCounters.bootTime()
         engine.start()
         pathMonitor.start { [weak self] details in
             guard let self else { return }
@@ -133,10 +157,12 @@ final class AppModel {
             errorMessage = Self.describe(error)
         }
         snapshot = engine.snapshot
+        sharing = nil
+        sharingSessions = engine.sharingSessions(limit: Self.sharingSessionLimit)
     }
 
     private func sample() {
-        interfaces = InterfaceCounters.read()
+        var interfaces = InterfaceCounters.read()
         #if targetEnvironment(simulator)
         // Dans le simulateur, les interfaces sont celles du Mac : `en0` y est souvent de
         // l'Ethernet. Elles prennent la famille du réseau courant, pour que la mesure vive.
@@ -144,23 +170,62 @@ final class AppModel {
             interfaces = interfaces.map {
                 InterfaceReading(
                     name: $0.name,
-                    kind: family,
+                    kind: $0.kind == .sharing ? .sharing : family,
                     receivedBytes: $0.receivedBytes,
                     sentBytes: $0.sentBytes
                 )
             }
         }
         #endif
-        snapshot = engine.ingest(interfaces)
-        samples = engine.recentSamples
-        sharingDetected = InterfaceCounters.sharingInterfaceIsUp()
+        let snapshot = engine.ingest(interfaces, bootTime: bootTime)
+        set(\.interfaces, interfaces)
+        set(\.snapshot, snapshot)
+        set(\.samples, engine.recentSamples)
+        refreshSharing()
+        let absence = engine.lastAbsence
+        if absence != self.absence {
+            self.absence = absence
+            // Un rattrapage entre dans l'historique : les écrans qui le lisent se relisent.
+            historyRevision += 1
+        }
         runAutomations()
+        if ticks % 10 == 0 {
+            set(\.plan, engine.planStatus())
+        }
         ticks += 1
         if ticks % 60 == 0 {
             historyRevision += 1
         }
-        if ticks % 5 == 1 {
+        set(\.probeInterval, Self.probeInterval(
+            lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled,
+            lowData: path.isConstrained
+        ))
+        if ticks % probeInterval == 1 {
             probeLatency()
+        }
+    }
+
+    /// L'intervalle des sondes selon les modes du système : la sonde coûte un peu de
+    /// batterie et de données, elle ralentit quand l'utilisateur demande d'économiser.
+    static func probeInterval(lowPower: Bool, lowData: Bool) -> Int {
+        if lowData { return probeIntervals.lowData }
+        if lowPower { return probeIntervals.lowPower }
+        return probeIntervals.normal
+    }
+
+    private func refreshSharing() {
+        let status = engine.sharingStatus
+        // Une session qui se termine rejoint la liste des sessions passées.
+        if (status == nil) != (sharing == nil) {
+            sharingSessions = engine.sharingSessions(limit: Self.sharingSessionLimit)
+        }
+        set(\.sharing, status)
+    }
+
+    /// Écrit une propriété observée seulement si sa valeur change.
+    private func set<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<AppModel, Value>, _ value: Value) {
+        if self[keyPath: keyPath] != value {
+            self[keyPath: keyPath] = value
         }
     }
 
@@ -327,6 +392,34 @@ final class AppModel {
         notifiesAutomations = granted
     }
 
+    // MARK: Forfait mobile
+
+    var dataPlan: DataPlan? { plan?.plan }
+
+    /// Enregistre le forfait, ou le retire (`nil`). Renvoie le message d'erreur, ou `nil`.
+    func setDataPlan(_ plan: DataPlan?) -> String? {
+        do {
+            try engine.setDataPlan(plan)
+            self.plan = engine.planStatus()
+            refreshAutomations()
+            return nil
+        } catch {
+            return Self.describe(error)
+        }
+    }
+
+    /// Recale le volume du cycle sur ce que l'opérateur indique.
+    func calibratePlan(usedBytes: UInt64) -> String? {
+        do {
+            try engine.calibratePlan(usedBytes: usedBytes)
+            plan = engine.planStatus()
+            runAutomations()
+            return nil
+        } catch {
+            return Self.describe(error)
+        }
+    }
+
     // MARK: Test de débit
 
     func startSpeedTest() {
@@ -351,6 +444,14 @@ final class AppModel {
         engine.compareUsage(from: from, to: to)
     }
 
+    func usageByNetwork(from: Date, to: Date) -> [NetworkUsage] {
+        engine.usageByNetwork(from: from, to: to)
+    }
+
+    func absences(limit: Int = 20) -> [AbsenceUsage] {
+        engine.absences(limit: limit)
+    }
+
     func exportCSV(from: Date, to: Date, step: HistoryStep) -> String {
         engine.exportCSV(from: from, to: to, step: step)
     }
@@ -358,6 +459,7 @@ final class AppModel {
     func eraseHistory() {
         perform { try engine.eraseHistory() }
         refreshAutomations()
+        refreshMeasuredState()
         speedTests = engine.speedTests
         samples = engine.recentSamples
         snapshot = engine.snapshot
@@ -366,12 +468,21 @@ final class AppModel {
     func eraseAll() {
         perform { try engine.eraseAll() }
         refreshAutomations()
+        refreshMeasuredState()
         speedTests = engine.speedTests
         devices = engine.devices
         latencyHost = Self.defaultLatencyHost
         speedTestServer = SpeedTestRunner.defaultServer
         samples = engine.recentSamples
         snapshot = engine.snapshot
+    }
+
+    /// Relit ce qui dépend des mesures enregistrées, après un effacement.
+    private func refreshMeasuredState() {
+        absence = engine.lastAbsence
+        sharing = engine.sharingStatus
+        sharingSessions = engine.sharingSessions(limit: Self.sharingSessionLimit)
+        plan = engine.planStatus()
     }
 
     // MARK: Erreurs

@@ -124,7 +124,8 @@ jobs:
           shot 9-test-de-debit -fluxaScreen test
           shot 10-automatisations -fluxaScreen automatisations
           shot 11-appareils -fluxaScreen appareils
-          shot 12-accueil -fluxaTab reseau NO
+          shot 12-forfait -fluxaScreen forfait
+          shot 13-accueil -fluxaTab reseau NO
       - uses: actions/upload-artifact@v4
         if: always()
         with:

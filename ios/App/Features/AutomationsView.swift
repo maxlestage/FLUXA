@@ -1,8 +1,8 @@
 import FluxaCore
 import SwiftUI
 
-/// Les automatisations : des règles sur le volume consommé ou sur l'heure, qui
-/// préviennent ou changent le profil choisi.
+/// Les automatisations : des règles sur le volume consommé, sur l'heure ou sur le forfait
+/// mobile, qui préviennent ou changent le profil choisi.
 struct AutomationsView: View {
     @Environment(AppModel.self) private var model
     @State private var draft: RuleDraft?
@@ -114,9 +114,15 @@ struct AutomationsView: View {
 /// Une règle en cours de saisie.
 struct RuleDraft: Identifiable {
     enum Kind: String, CaseIterable, Identifiable {
-        case usage, schedule
+        case usage, schedule, plan
         var id: String { rawValue }
-        var title: String { self == .usage ? "Seuil de volume" : "Plage horaire" }
+        var title: String {
+            switch self {
+            case .usage: "Volume du jour"
+            case .schedule: "Plage horaire"
+            case .plan: "Forfait"
+            }
+        }
     }
 
     enum Unit: UInt64, CaseIterable, Identifiable {
@@ -136,6 +142,8 @@ struct RuleDraft: Identifiable {
     var start = RuleDraft.time(minutes: 22 * 60)
     var end = RuleDraft.time(minutes: 7 * 60)
     var weekdays: Set<Int> = []
+    /// Le pourcentage du forfait qui déclenche la règle.
+    var percent = 80
     var changesProfile = false
     var profileID: String?
 
@@ -157,6 +165,9 @@ struct RuleDraft: Identifiable {
             start = Self.time(minutes: startMinute)
             end = Self.time(minutes: endMinute)
             weekdays = days
+        case .planUsage(let value):
+            kind = .plan
+            percent = value
         }
         switch rule.action {
         case .alert:
@@ -180,6 +191,8 @@ struct RuleDraft: Identifiable {
                 endMinute: Self.minutes(of: end),
                 weekdays: weekdays
             )
+        case .plan:
+            trigger = .planUsage(percent: percent)
         }
         let action: AutomationRule.Action
         if changesProfile, let profileID {
@@ -242,6 +255,18 @@ private struct RuleEditor: View {
                         DatePicker("Début", selection: $draft.start, displayedComponents: .hourAndMinute)
                         DatePicker("Fin", selection: $draft.end, displayedComponents: .hourAndMinute)
                         WeekdayPicker(selection: $draft.weekdays)
+                    case .plan:
+                        Stepper(
+                            "À \(Format.percent(Double(draft.percent))) du forfait",
+                            value: $draft.percent,
+                            in: 5...100,
+                            step: 5
+                        )
+                        if model.plan == nil {
+                            Text("Réglez d’abord votre forfait mobile, dans Réglages.")
+                                .font(.footnote)
+                                .foregroundStyle(Theme.secondary)
+                        }
                     }
                 }
 
@@ -258,7 +283,7 @@ private struct RuleEditor: View {
                     Text("Alors")
                 } footer: {
                     Text(draft.changesProfile
-                        ? "Le profil précédent revient à la fin de la plage, ou le lendemain pour un seuil."
+                        ? "Le profil précédent revient à la fin de la plage, le lendemain pour un volume du jour, ou à la remise à zéro du forfait."
                         : "La règle vous prévient, sans rien changer.")
                 }
 
@@ -338,6 +363,8 @@ enum RuleText {
         case .schedule(let start, let end, let weekdays):
             let days = weekdays.isEmpty ? "tous les jours" : "\(weekdays.count) jour\(weekdays.count > 1 ? "s" : "") par semaine"
             when = "De \(clock(start)) à \(clock(end)), \(days)"
+        case .planUsage(let percent):
+            when = "À \(Format.percent(Double(percent))) du forfait"
         }
         let then: String
         switch rule.action {
