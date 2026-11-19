@@ -79,6 +79,7 @@ struct DashboardView: View {
                 .foregroundStyle(Theme.up)
         }
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("debit")
     }
 
     @ViewBuilder
