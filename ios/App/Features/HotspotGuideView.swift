@@ -35,6 +35,18 @@ struct HotspotGuideView: View {
                     .padding(.vertical, 4)
                 }
 
+                Section {
+                    LabeledContent("État") {
+                        if model.sharingDetected {
+                            StatusPill(.supported, "Détecté")
+                        } else {
+                            StatusPill(.guide, "Non détecté")
+                        }
+                    }
+                } footer: {
+                    Text("iOS ne dit pas à une app si le partage est actif. FLUXA le déduit de l’interface réseau que le système crée pour les appareils reliés : ce signe peut manquer, par exemple tant qu’aucun appareil n’est connecté.")
+                }
+
                 Section("Activer le partage") {
                     ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                         HStack(alignment: .firstTextBaseline, spacing: 12) {

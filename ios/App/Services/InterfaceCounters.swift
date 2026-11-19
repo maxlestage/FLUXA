@@ -40,6 +40,31 @@ enum InterfaceCounters {
         return readings.sorted { $0.name < $1.name }
     }
 
+    /// Si une interface de partage de connexion est en service.
+    ///
+    /// iOS ne dit pas à une app si le partage est actif. Quand il l'est, le système crée
+    /// une interface de pont (`bridge100`) vers les appareils reliés : sa présence est un
+    /// signe indirect, qui peut manquer.
+    static func sharingInterfaceIsUp() -> Bool {
+        var list: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&list) == 0, let first = list else { return false }
+        defer { freeifaddrs(list) }
+        var names: [(name: String, isRunning: Bool)] = []
+        var cursor: UnsafeMutablePointer<ifaddrs>? = first
+        while let entry = cursor {
+            let interface = entry.pointee
+            cursor = interface.ifa_next
+            let flags = Int32(bitPattern: interface.ifa_flags)
+            names.append((String(cString: interface.ifa_name), flags & IFF_UP != 0 && flags & IFF_RUNNING != 0))
+        }
+        return isSharing(names)
+    }
+
+    /// La règle de détection, séparée de la lecture du système pour être testée.
+    static func isSharing(_ interfaces: [(name: String, isRunning: Bool)]) -> Bool {
+        interfaces.contains { $0.isRunning && $0.name.hasPrefix("bridge10") }
+    }
+
     /// La famille d'une interface d'après son nom. Les interfaces qui ne portent pas le
     /// trafic Internet de l'iPhone (tunnels, AirDrop, pont du partage) sont écartées, pour
     /// ne pas compter deux fois les mêmes octets.
