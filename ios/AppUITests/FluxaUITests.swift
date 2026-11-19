@@ -113,7 +113,7 @@ final class FluxaUITests: XCTestCase {
         launch(["-fluxaTab", "partage"])
         XCTAssertTrue(app.navigationBars["Partage"].waitForExistence(timeout: 30))
         XCTAssertTrue(element(containing: "Le partage de connexion appartient à iOS").exists)
-        XCTAssertTrue(button(startingWith: "Ouvrir").firstMatch.exists)
+        XCTAssertTrue(scroll(to: button(startingWith: "Ouvrir").firstMatch))
         // Les capacités réservées au système sont listées avec leur statut.
         XCTAssertTrue(scroll(to: element(containing: "Activer le partage depuis une app")))
         XCTAssertTrue(element(containing: "Réservé à iOS").exists)
@@ -191,7 +191,7 @@ final class FluxaUITests: XCTestCase {
     // MARK: Test de débit
 
     func testTheSpeedTestMeasuresBothDirections() {
-        launch(["-fluxaScreen", "test"])
+        launch(["-fluxaScreen", "test", "-fluxaShortSpeedTest", "YES"])
         XCTAssertTrue(app.navigationBars["Test de débit"].waitForExistence(timeout: 30))
         let start = button(startingWith: "Lancer le test").firstMatch
         XCTAssertTrue(start.waitForExistence(timeout: 10))
@@ -199,10 +199,18 @@ final class FluxaUITests: XCTestCase {
         let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == YES"), object: start)
         XCTAssertEqual(XCTWaiter().wait(for: [enabled], timeout: 15), .completed)
         start.tap()
-        // Latence, téléchargement puis envoi : une vingtaine de secondes.
+        // Latence, téléchargement puis envoi. Le test s'achève sur un résultat ou sur un
+        // message d'erreur : on attend l'un des deux, et seul le résultat est accepté.
         let done = app.descendants(matching: .any)["test-termine"]
-        XCTAssertTrue(done.waitForExistence(timeout: 60), "le test n'a pas abouti")
-        XCTAssertFalse(app.descendants(matching: .any)["erreur-test"].exists)
+        let failed = app.descendants(matching: .any)["erreur-test"]
+        let ended = NSPredicate { _, _ in done.exists || failed.exists }
+        let waiting = XCTNSPredicateExpectation(predicate: ended, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [waiting], timeout: 60), .completed, "le test ne s'est pas terminé")
+        XCTAssertFalse(failed.exists, "le test a échoué : \(failed.exists ? failed.label : "")")
+        XCTAssertTrue(done.exists)
+        // Les deux sens ont un débit : plus aucun tiret dans les mesures.
+        XCTAssertFalse(element(containing: "Descendant, —").exists)
+        XCTAssertFalse(element(containing: "Montant, —").exists)
         // Le résultat rejoint les tests précédents.
         XCTAssertFalse(element(containing: "Aucun test pour l").exists)
     }
