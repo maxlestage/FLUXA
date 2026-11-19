@@ -86,14 +86,12 @@ final class HistoryTests: XCTestCase {
         let bench = Bench().started()
         let start = bench.clock.date
         // Une courte mesure à différents âges, vus depuis le dernier jour.
-        var ages: [Int] = []
         var elapsedDays = 0
         for age in [400, 370, 360, 31, 29, 8, 6, 0] {
             bench.clock.advance(Double((400 - age) - elapsedDays) * day)
             elapsedDays = 400 - age
             bench.rebase()
             bench.measure(seconds: 2, down: 10, up: 1)
-            ages.append(age)
         }
         // La purge passe à la fin d'une minute.
         bench.measure(seconds: 60, down: 10, up: 1)
@@ -105,7 +103,7 @@ final class HistoryTests: XCTestCase {
         }
         let ageInDays = { (aggregate: Aggregate) in Int(end.timeIntervalSince(aggregate.start) / day) }
         XCTAssertEqual(Set(all(.minute).map(ageInDays)), [6, 0], "minutes : 7 jours")
-        XCTAssertEqual(Set(all(.hour).map(ageInDays)), [29, 6, 0], "heures : 30 jours")
+        XCTAssertEqual(Set(all(.hour).map(ageInDays)), [29, 8, 6, 0], "heures : 30 jours")
         XCTAssertEqual(Set(all(.day).map(ageInDays)), [360, 31, 29, 8, 6, 0], "jours : 12 mois")
         XCTAssertTrue(
             bench.engine.diagnostics().events.contains { $0.message.hasPrefix("Purge :") })

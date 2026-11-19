@@ -182,9 +182,11 @@ final class MeasureTests: XCTestCase {
         XCTAssertEqual(bench.engine.snapshot.receivedBytesToday, 5_000_000)
         XCTAssertEqual(bench.engine.snapshot.sentBytesToday, 2_500_000)
 
-        bench.measure(seconds: 10, down: 8, up: 4)  // jusqu'à 00 h 00 min 05 s
-        XCTAssertEqual(bench.engine.snapshot.receivedBytesToday, 5_000_000, "depuis minuit seulement")
-        XCTAssertEqual(bench.engine.snapshot.sentBytesToday, 2_500_000)
+        // Dix relevés de plus, jusqu'à 00 h 00 min 05 s. Une mesure compte dans la
+        // minute où elle se termine : celle de minuit pile ouvre la nouvelle journée.
+        bench.measure(seconds: 10, down: 8, up: 4)
+        XCTAssertEqual(bench.engine.snapshot.receivedBytesToday, 6_000_000, "depuis minuit seulement")
+        XCTAssertEqual(bench.engine.snapshot.sentBytesToday, 3_000_000)
 
         // Sans mesure, le cumul retombe à zéro au changement de jour.
         clock.advance(day)
@@ -192,11 +194,15 @@ final class MeasureTests: XCTestCase {
     }
 
     func testMidnightFollowsTheCalendar() {
-        // 23 h 30 UTC : déjà le lendemain à UTC+1.
-        let clock = TestClock(noon.addingTimeInterval(11 * hour + 29 * minute))
+        // À UTC+1, minuit local tombe à 23 h UTC.
+        let clock = TestClock(noon.addingTimeInterval(10 * hour + 59 * minute))
         let bench = Bench(clock: clock, calendar: calendar(utcOffsetSeconds: 3_600)).started()
-        bench.measure(seconds: 120, down: 8, up: 0)  // de 23 h 29 à 23 h 31 UTC
-        XCTAssertEqual(bench.engine.snapshot.receivedBytesToday, 60 * 1_000_000)
+        bench.measure(seconds: 120, down: 8, up: 0)  // de 22 h 59 à 23 h 01 UTC
+        XCTAssertEqual(bench.engine.snapshot.receivedBytesToday, 61 * 1_000_000)
+        // Le même instant, vu en UTC, appartient encore à la journée commencée à 0 h UTC.
+        let utc = Bench(clock: TestClock(noon.addingTimeInterval(10 * hour + 59 * minute))).started()
+        utc.measure(seconds: 120, down: 8, up: 0)
+        XCTAssertEqual(utc.engine.snapshot.receivedBytesToday, 120 * 1_000_000)
     }
 
     func testTodayTotalsSurviveARestart() throws {
