@@ -1,5 +1,6 @@
 # L'app iOS, en Swift : la logique (FluxaCore) est testée sous Linux et macOS, puis
-# l'app est compilée pour le simulateur, lancée, et une capture d'écran est gardée.
+# l'app est compilée pour le simulateur, testée écran par écran (tests d'interface),
+# et une capture de chaque écran est gardée.
 #
 # Aucune signature ici : la publication (TestFlight, App Store) demande un compte
 # développeur Apple et se fait depuis Xcode.
@@ -41,6 +42,7 @@ jobs:
   app:
     name: App (iOS simulator)
     runs-on: macos-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - name: Xcode version
@@ -60,9 +62,7 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             build
-      - name: Launch in a simulator and take screenshots
-        working-directory: ios
-        continue-on-error: true
+      - name: Boot a simulator
         # Le premier démarrage d'un simulateur peut durer plusieurs minutes sur un runner.
         timeout-minutes: 15
         run: |
@@ -80,17 +80,35 @@ jobs:
           ")
           xcrun simctl boot "$device"
           xcrun simctl bootstatus "$device" -b
-          xcrun simctl install "$device" build/Build/Products/Debug-iphonesimulator/Fluxa.app
+          echo "DEVICE=$device" >> "$GITHUB_ENV"
+      - name: Test the app in the simulator
+        working-directory: ios
+        timeout-minutes: 25
+        run: |
+          set -o pipefail
+          xcodebuild -quiet \
+            -project Fluxa.xcodeproj -scheme Fluxa -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DEVICE" \
+            -derivedDataPath build \
+            test
+      - name: Take a screenshot of every screen
+        if: always()
+        working-directory: ios
+        continue-on-error: true
+        timeout-minutes: 8
+        run: |
+          set -euxo pipefail
+          xcrun simctl install "$DEVICE" build/Build/Products/Debug-iphonesimulator/Fluxa.app
           mkdir -p screenshots
           # Le tableau de bord, assez longtemps pour qu'une minute entre dans l'historique.
-          xcrun simctl launch "$device" app.fluxa.ios
+          xcrun simctl launch "$DEVICE" app.fluxa.ios
           sleep 75
-          xcrun simctl io "$device" screenshot screenshots/1-tableau-de-bord.png
+          xcrun simctl io "$DEVICE" screenshot screenshots/1-tableau-de-bord.png
           shot() {
-            xcrun simctl terminate "$device" app.fluxa.ios || true
-            xcrun simctl launch "$device" app.fluxa.ios "$2" "$3"
+            xcrun simctl terminate "$DEVICE" app.fluxa.ios || true
+            xcrun simctl launch "$DEVICE" app.fluxa.ios "$2" "$3"
             sleep 6
-            xcrun simctl io "$device" screenshot "screenshots/$1.png"
+            xcrun simctl io "$DEVICE" screenshot "screenshots/$1.png"
           }
           shot 2-mon-reseau -fluxaScreen reseau
           shot 3-partage -fluxaTab partage

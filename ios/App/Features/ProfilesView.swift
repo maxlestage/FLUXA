@@ -111,6 +111,7 @@ private struct ProfileRow: View {
             Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(isActive ? Theme.down : Theme.tertiary)
                 .imageScale(.large)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(profile.name)
                     .foregroundStyle(Theme.text)
@@ -152,6 +153,7 @@ private struct ProfileEditor: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State var draft: ProfileDraft
+    @State private var problem: String?
 
     var body: some View {
         NavigationStack {
@@ -173,6 +175,13 @@ private struct ProfileEditor: View {
                 } footer: {
                     Text("De 0,1 à 1 000 Mb/s. Sans plafond, le sens reste libre.")
                 }
+                if let problem {
+                    Section {
+                        Text(problem)
+                            .foregroundStyle(Theme.reserved)
+                            .accessibilityIdentifier("erreur-profil")
+                    }
+                }
             }
             .fluxaBackground()
             .navigationTitle(draft.profileID == nil ? "Nouveau profil" : "Modifier le profil")
@@ -183,13 +192,13 @@ private struct ProfileEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Enregistrer") {
-                        let saved = model.saveProfile(
+                        problem = model.saveProfile(
                             id: draft.profileID,
                             name: draft.name,
                             downloadMbps: draft.limitsDownload ? draft.downloadMbps : nil,
                             uploadMbps: draft.limitsUpload ? draft.uploadMbps : nil
                         )
-                        if saved { dismiss() }
+                        if problem == nil { dismiss() }
                     }
                 }
             }
