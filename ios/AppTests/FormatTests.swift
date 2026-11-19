@@ -208,6 +208,11 @@ final class FormatTests: XCTestCase {
 
         // Avant un jour de cycle, pas de projection inventée.
         XCTAssertEqual(PlanText.projection(planStatus(used: 1_000_000)), "La projection s’affiche après un jour de cycle.")
+        // Sans volume, pas de rythme à prolonger.
+        XCTAssertEqual(
+            PlanText.projection(planStatus(used: 0, projected: 0)),
+            "Aucun volume compté sur le réseau mobile dans ce cycle."
+        )
         // Un volume rattrapé est un minimum, et le dit.
         XCTAssertEqual(PlanText.atLeast(1_200_000_000), "au moins 1,20\(space)Go")
         XCTAssertEqual(PlanText.atLeast(0), "0\(space)o")
