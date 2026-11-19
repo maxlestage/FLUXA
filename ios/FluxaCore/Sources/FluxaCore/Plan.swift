@@ -19,7 +19,11 @@ import Foundation
 //     moins `actuel` octets ont passé). Le volume rattrapé est donc toujours « au moins ».
 //   - Une interface absente du point de reprise ne compte pas.
 //   - Le rattrapage ne produit ni débit ni agrégat de minute : il est gardé à part, comme
-//     une `AbsenceUsage` (seulement si son volume n'est pas nul), 200 au plus.
+//     une `AbsenceUsage` (seulement si son volume n'est pas nul), 200 au plus. Au-delà,
+//     les deux plus anciennes fusionnent : leur volume reste compté pour le forfait.
+//   - Un relevé sans heure de démarrage ne laisse pas de point de reprise. `eraseHistory`
+//     garde le point de reprise quand la mesure tourne (il date du dernier relevé) et le
+//     retire quand elle est arrêtée (il ferait revenir un volume d'avant l'effacement).
 //
 // Volume par réseau. Chaque mesure en direct est aussi rangée par famille d'interface
 // (celle du réseau actif), à l'heure et au jour, avec la même conservation que les
@@ -561,8 +565,12 @@ extension FluxaEngine {
         _ readings: [InterfaceReading], deltas: InterfaceMeter.Deltas?, isResume: Bool,
         checkpoint: CounterCheckpoint?, at date: Date
     ) {
-        var seen = Set<String>()
-        let bridges = readings.filter { $0.kind == .sharing && seen.insert($0.name).inserted }
+        // Le plus souvent, aucun pont : rien à construire pour ce relevé.
+        var bridges: [InterfaceReading] = []
+        if readings.contains(where: { $0.kind == .sharing }) {
+            var seen = Set<String>()
+            bridges = readings.filter { $0.kind == .sharing && seen.insert($0.name).inserted }
+        }
         sharingPresent = !bridges.isEmpty
         sharingRate = nil
 
@@ -592,14 +600,19 @@ extension FluxaEngine {
             }
             return
         }
-        guard var session = state.currentSharing else {
-            state.currentSharing = SharingSession(
+        var session: SharingSession
+        if let current = state.currentSharing {
+            session = current
+        } else {
+            session = SharingSession(
                 id: state.nextSharingSessionID, start: date, end: date, toDevicesBytes: 0,
                 fromDevicesBytes: 0, isLowerBound: false)
             state.nextSharingSessionID += 1
+            state.currentSharing = session
             log(.info, "Partage de connexion détecté.", at: date)
-            return
         }
+        // Un pont qui vient d'apparaître n'a pas encore de différence : la session ouvre
+        // à zéro. Une session rouverte après un effacement compte dès ce relevé.
         guard !isResume, let deltas else { return }
 
         var toDevices: UInt64 = 0
