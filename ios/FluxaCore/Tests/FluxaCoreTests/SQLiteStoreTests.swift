@@ -400,6 +400,264 @@ final class SQLiteStoreTests: XCTestCase {
         XCTAssertNil(try store.load(), "la base reste vide")
     }
 
+    // MARK: Forfait, volume par réseau, rattrapage et partage (schéma 2)
+
+    /// Un état qui porte tout ce que la version 2 ajoute, produit par le moteur : forfait
+    /// recalé, volume par réseau sur deux heures, deux absences, une session de partage
+    /// terminée et une en cours, point de reprise.
+    private func planState() throws -> EngineState {
+        let memory = MemoryStore()
+        let clock = TestClock(noon.addingTimeInterval(0.25))
+        let boot = noon.addingTimeInterval(-3 * day)
+        let engine = FluxaEngine(store: memory, counterWidth: .bits64, calendar: calendar(), now: { clock.date })
+        var mobile: UInt64 = 0
+        var bridged: UInt64?
+        let read = {
+            var readings = [cellular(mobile, mobile / 8), wifi(mobile / 2, 7)]
+            if let bridged {
+                readings.append(
+                    InterfaceReading(name: "bridge100", kind: .sharing, receivedBytes: bridged / 9, sentBytes: bridged))
+            }
+            engine.ingest(readings, bootTime: boot)
+        }
+        let pause = { (seconds: TimeInterval, grown: UInt64) in
+            engine.stop()
+            clock.advance(seconds)
+            mobile += grown
+            engine.start()
+            read()
+        }
+
+        engine.updatePath(kind: .cellular, isOnline: true)
+        engine.start()
+        read()
+        for second in 0..<20 {
+            clock.advance(1)
+            mobile += 1_000_000
+            bridged = second < 5 ? nil : (second < 12 ? UInt64(second) * 40_000 : nil)
+            read()
+        }
+        pause(hour, 800_000_000)
+        engine.updatePath(kind: .wifi, isOnline: true)
+        bridged = 0
+        for _ in 0..<10 {
+            clock.advance(1)
+            mobile += 2_000_000
+            bridged = (bridged ?? 0) + 123_457
+            read()
+        }
+        pause(20 * minute, 5_000_000_000)
+
+        try engine.setDataPlan(DataPlan(allowanceBytes: 100_000_000_000, resetDay: 31))
+        try engine.calibratePlan(usedBytes: 12_345_678_901)
+        try engine.saveRule(AutomationRule(name: "Forfait", trigger: .planUsage(percent: 80), action: .alert))
+        try engine.flush()
+
+        let state = try XCTUnwrap(try memory.load())
+        XCTAssertEqual(state.networkHours.count, 2, "le mobile à midi, le Wi-Fi à 13 h")
+        XCTAssertEqual(state.networkDays.count, 2)
+        XCTAssertEqual(state.absences.count, 2)
+        XCTAssertEqual(state.sharingSessions.count, 1)
+        XCTAssertEqual(state.currentSharing?.isLowerBound, true, "le partage a continué pendant la pause")
+        XCTAssertNotNil(state.checkpoint)
+        XCTAssertNotNil(state.planCalibration)
+        return state
+    }
+
+    func testThePlanStateRoundTripsExactly() throws {
+        let state = try planState()
+        let store = try SQLiteStore(url: url)
+        try store.save(state)
+        XCTAssertEqual(try store.load(), state)
+
+        let reopened = try SQLiteStore(url: url)
+        let loaded = try XCTUnwrap(try reopened.load())
+        XCTAssertEqual(loaded, state)
+        XCTAssertEqual(loaded.dataPlan, DataPlan(allowanceBytes: 100_000_000_000, resetDay: 31))
+        XCTAssertEqual(loaded.planCalibration?.usedBytes, 12_345_678_901)
+        XCTAssertEqual(loaded.checkpoint?.counters.map(\.name), ["pdp_ip0", "en0", "bridge100"])
+        XCTAssertEqual(loaded.rules.map(\.trigger), [.planUsage(percent: 80)])
+        try reopened.save(loaded)
+        XCTAssertEqual(reopened.lastSaveChanges, 0, "lire puis enregistrer n'écrit rien")
+
+        // Le moteur relu donne les mêmes réponses.
+        let clock = TestClock(noon.addingTimeInterval(2 * hour))
+        let engine = FluxaEngine(store: reopened, calendar: calendar(), now: { clock.date })
+        XCTAssertEqual(engine.diagnostics().events.map(\.level), [.info], "aucune erreur de lecture")
+        XCTAssertEqual(engine.planStatus()?.calibratedBytes, 12_345_678_901)
+        XCTAssertEqual(engine.absences(limit: 5).map(\.id), [2, 1])
+        XCTAssertEqual(engine.sharingSessions(limit: 5).map(\.id), [1])
+        XCTAssertEqual(
+            engine.usageByNetwork(from: noon.addingTimeInterval(-hour), to: .distantFuture).map(\.kind),
+            [.cellular, .wifi])
+    }
+
+    func testThePlanStateHasTypedColumns() throws {
+        let state = try planState()
+        try SQLiteStore(url: url).save(state)
+        let database = try SQLiteDatabase(path: url.path)
+
+        XCTAssertEqual(
+            try database.rows("SELECT step, network, received_bytes FROM network_usage ORDER BY step, start, network") {
+                "\($0.text(0)) \($0.text(1)) \($0.int(2))"
+            },
+            ["day cellular 20000000", "day wifi 10000000", "hour cellular 20000000", "hour wifi 10000000"])
+        // Les volumes se somment en SQL : ce sont de vrais entiers.
+        XCTAssertEqual(
+            try database.integer("SELECT SUM(received_bytes + sent_bytes) FROM network_usage WHERE step = 'day'"),
+            32_500_000)
+        XCTAssertEqual(
+            try database.rows("SELECT id, ended_at - started_at, volumes_json FROM absences ORDER BY id") {
+                "\($0.int(0)) \($0.int(1)) \($0.text(2))"
+            },
+            [
+                #"1 3600 [{"kind":"wifi","receivedBytes":400000000,"sentBytes":0},{"kind":"cellular","receivedBytes":800000000,"sentBytes":100000000}]"#,
+                #"2 1200 [{"kind":"wifi","receivedBytes":2500000000,"sentBytes":0},{"kind":"cellular","receivedBytes":5000000000,"sentBytes":625000000}]"#,
+            ])
+        XCTAssertEqual(
+            try database.rows(
+                "SELECT id, to_devices_bytes, from_devices_bytes, is_lower_bound, ended_at - started_at FROM sharing_sessions"
+            ) { "\($0.int(0)) \($0.int(1)) \($0.int(2)) \($0.int(3)) \($0.int(4))" },
+            ["1 240000 26666 0 6"])
+        XCTAssertEqual(
+            try database.rows(
+                "SELECT key FROM app_settings WHERE key IN ('data_plan', 'plan_calibration', 'counter_checkpoint', 'current_sharing_session', 'next_absence_id', 'next_sharing_session_id') ORDER BY key"
+            ) { $0.text(0) },
+            [
+                "counter_checkpoint", "current_sharing_session", "data_plan", "next_absence_id",
+                "next_sharing_session_id", "plan_calibration",
+            ])
+        XCTAssertEqual(
+            try database.rows("SELECT value FROM app_settings WHERE key = 'data_plan'") { $0.text(0) },
+            [#"{"allowanceBytes":100000000000,"resetDay":31}"#])
+    }
+
+    func testOnlyTheChangedPlanRowsAreWritten() throws {
+        var state = try planState()
+        let store = try SQLiteStore(url: url)
+        try store.save(state)
+
+        // Un forfait retiré : son réglage et son recalage partent, rien d'autre.
+        state.dataPlan = nil
+        state.planCalibration = nil
+        try store.save(state)
+        XCTAssertEqual(store.lastSaveChanges, 2)
+
+        // Deux absences fondues en une : une ligne supprimée, une réécrite.
+        state.absences = [
+            AbsenceUsage(
+                id: 1, start: state.absences[0].start, end: state.absences[1].end,
+                volumes: [NetworkVolume(kind: .cellular, receivedBytes: 1, sentBytes: 2)])
+        ]
+        try store.save(state)
+        XCTAssertEqual(store.lastSaveChanges, 2)
+
+        // Une session qui se termine : sa ligne, et le réglage de la session en cours.
+        state.sharingSessions.append(try XCTUnwrap(state.currentSharing))
+        state.currentSharing = nil
+        try store.save(state)
+        XCTAssertEqual(store.lastSaveChanges, 2)
+
+        // Un volume de plus sur une heure et un jour.
+        state.networkHours.add(kind: .wired, receivedBytes: 5, sentBytes: 5, at: noon)
+        state.networkDays.add(kind: .cellular, receivedBytes: 5, sentBytes: 5, at: noon.addingTimeInterval(-12 * hour))
+        try store.save(state)
+        XCTAssertEqual(store.lastSaveChanges, 2)
+        XCTAssertEqual(try SQLiteStore(url: url).load(), state)
+    }
+
+    func testAVersionOneDatabaseIsMigratedWithItsData() throws {
+        // Une base telle que la version précédente l'a créée et remplie.
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        do {
+            let database = try SQLiteDatabase(path: url.path)
+            try database.execute(SQLiteStore.schemaV1)
+            try database.execute(
+                """
+                PRAGMA user_version = 1;
+                INSERT INTO app_settings (key, value) VALUES
+                    ('state_version', '1'), ('next_profile_number', '2'), ('next_rule_number', '1'),
+                    ('next_automation_event_id', '1'), ('next_device_number', '2'),
+                    ('active_profile_id', 'custom-1');
+                INSERT INTO bandwidth_profiles (id, position, name, download_bps, upload_bps, is_builtin)
+                    VALUES ('custom-1', 0, 'Visio', 8000000, NULL, 0);
+                INSERT INTO usage_records (step, start, measured_seconds, received_bytes, sent_bytes,
+                    peak_download_bps, peak_upload_bps, sample_count)
+                    VALUES ('day', \(noon.timeIntervalSinceReferenceDate - 43_200), 60, 150000000, 30000000, 2e7, 4e6, 60);
+                INSERT INTO devices (id, position, name, kind, profile_id, note, added_at)
+                    VALUES ('device-1', 0, 'MacBook', 'computer', 'custom-1', '', 0);
+                """)
+        }
+
+        let store = try SQLiteStore(url: url)
+        let database = try SQLiteDatabase(path: url.path)
+        XCTAssertEqual(try database.integer("PRAGMA user_version"), 2)
+        let tables = try database.rows("SELECT name FROM sqlite_master WHERE type = 'table'") { $0.text(0) }
+        XCTAssertEqual(Set(tables), Set(SQLiteStore.tables))
+
+        // Les données d'avant sont là ; ce que la version 2 ajoute est vide.
+        var state = try XCTUnwrap(try store.load())
+        XCTAssertEqual(state.profiles.map(\.name), ["Visio"])
+        XCTAssertEqual(state.activeProfileID, "custom-1")
+        XCTAssertEqual(state.days.buckets.map(\.receivedBytes), [150_000_000])
+        XCTAssertEqual(state.devices.map(\.name), ["MacBook"])
+        XCTAssertEqual(state.nextDeviceNumber, 2)
+        XCTAssertEqual(state.version, EngineState.currentVersion)
+        XCTAssertNil(state.dataPlan)
+        XCTAssertNil(state.checkpoint)
+        XCTAssertNil(state.currentSharing)
+        XCTAssertEqual(state.networkDays, NetworkSeries())
+        XCTAssertTrue(state.absences.isEmpty)
+        XCTAssertTrue(state.sharingSessions.isEmpty)
+        XCTAssertEqual(state.nextAbsenceID, 1)
+
+        // Le moteur s'en sert, et la base migrée garde le nouvel état.
+        let clock = TestClock()
+        let engine = FluxaEngine(store: store, calendar: calendar(), now: { clock.date })
+        XCTAssertEqual(engine.diagnostics().events.map(\.level), [.info])
+        XCTAssertEqual(engine.snapshot.receivedBytesToday, 0, "pas de minutes : le jour ne se relit pas en direct")
+        try engine.setDataPlan(DataPlan(allowanceBytes: 5_000_000_000, resetDay: 12))
+        state = try XCTUnwrap(try SQLiteStore(url: url).load())
+        XCTAssertEqual(state.dataPlan, DataPlan(allowanceBytes: 5_000_000_000, resetDay: 12))
+        XCTAssertEqual(state.profiles.count, 8, "les préréglages et le profil créé")
+
+        // Rouvrir ne migre pas deux fois.
+        XCTAssertEqual(try SQLiteStore(url: url).load(), state)
+    }
+
+    func testALegacyFileWithoutThePlanFieldsIsImported() throws {
+        // L'ancien fichier JSON, d'avant le forfait et le volume par réseau.
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let legacy = directory.appendingPathComponent("fluxa.json")
+        try Data(
+            #"""
+            {"version":1,"activeProfileID":"standard","nextProfileNumber":2,"policyLog":[],
+             "profiles":[{"id":"custom-1","name":"Visio","downloadBps":8000000,"isBuiltin":false}],
+             "minutes":[],"hours":[],"days":[[794059200,60,150000000,30000000,2e7,4e6,60]],
+             "rules":[],"devices":[],"speedTests":[]}
+            """#.utf8
+        ).write(to: legacy)
+
+        let store = try SQLiteStore(url: url)
+        XCTAssertTrue(try store.importLegacyFile(at: legacy))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: legacy.path))
+        let state = try XCTUnwrap(try SQLiteStore(url: url).load())
+        XCTAssertEqual(state.profiles.map(\.id), ["custom-1"])
+        XCTAssertEqual(state.activeProfileID, "standard")
+        XCTAssertEqual(state.days.buckets.map(\.sentBytes), [30_000_000])
+        XCTAssertEqual(state.version, EngineState.currentVersion)
+        XCTAssertNil(state.dataPlan)
+        XCTAssertNil(state.checkpoint)
+        XCTAssertTrue(state.absences.isEmpty)
+        XCTAssertEqual(state.networkHours, NetworkSeries())
+
+        // Et un état d'aujourd'hui passe aussi par le fichier JSON de secours.
+        let rich = try planState()
+        let file = FileStore(url: directory.appendingPathComponent("fluxa-secours.json"))
+        try file.save(rich)
+        XCTAssertEqual(try file.load(), rich)
+    }
+
     // MARK: Avec le moteur
 
     func testTheEngineKeepsItsHistoryInTheDatabase() throws {
@@ -452,5 +710,20 @@ final class SQLiteStoreTests: XCTestCase {
         // pour l'heure et pour le jour, quel que soit l'historique.
         XCTAssertEqual(store.lastSaveChanges, 5)
         XCTAssertGreaterThan(first, 3, "le premier enregistrement écrit aussi les préréglages et les réglages")
+    }
+
+    func testTheCheckpointCostsOneRowPerMinute() throws {
+        let store = try SQLiteStore(url: url)
+        let clock = TestClock()
+        let engine = FluxaEngine(store: store, calendar: calendar(), now: { clock.date })
+        let boot = noon.addingTimeInterval(-day)
+        engine.updatePath(kind: .cellular, isOnline: true)
+        engine.start()
+        for second in 0...120 {
+            engine.ingest([cellular(UInt64(second) * 1_000, 0)], bootTime: boot)
+            clock.advance(1)
+        }
+        // Les cinq lignes de la minute, et le réglage du point de reprise.
+        XCTAssertEqual(store.lastSaveChanges, 6)
     }
 }
