@@ -130,6 +130,44 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(draft.rule.trigger, .dailyUsage(bytes: 0))
     }
 
+    func testAChangeOfVolumeIsSaidPlainly() {
+        func comparison(_ percent: Double?, now: UInt64 = 0, before: UInt64 = 0) -> UsageComparison {
+            UsageComparison(
+                current: UsageSummary(receivedBytes: now),
+                previous: UsageSummary(receivedBytes: before),
+                changePercent: percent
+            )
+        }
+        XCTAssertEqual(HistoryView.change(comparison(12.4)), "+12\(space)% de volume")
+        XCTAssertEqual(HistoryView.change(comparison(-8.6)), "−9\(space)% de volume")
+        XCTAssertEqual(HistoryView.change(comparison(0.2)), "Volume stable")
+        XCTAssertEqual(HistoryView.change(comparison(nil)), "Rien à comparer")
+        XCTAssertEqual(
+            HistoryView.previousDetail(comparison(100, now: 2_000_000, before: 1_000_000)),
+            "2,0\(space)Mo sur cette période, 1,0\(space)Mo sur la précédente."
+        )
+        XCTAssertEqual(HistoryView.previousDetail(comparison(nil)), "La période précédente n’a pas de mesure.")
+    }
+
+    func testDeletingAUsedProfileSaysWhatChanges() {
+        XCTAssertEqual(
+            ProfilesView.warning(for: ProfileUsage(ruleNames: ["Nuit"], deviceNames: [])),
+            "La règle Nuit le choisit : elle ne changera plus de profil."
+        )
+        XCTAssertEqual(
+            ProfilesView.warning(for: ProfileUsage(ruleNames: ["Nuit", "Forfait"], deviceNames: ["MacBook"])),
+            "Les règles Nuit, Forfait le choisissent : elles ne changeront plus de profil. L’appareil MacBook n’aura plus de profil."
+        )
+        XCTAssertTrue(ProfileUsage().isEmpty)
+    }
+
+    func testEveryDeviceKindHasANameAndASymbol() {
+        for kind in DeviceKind.allCases {
+            XCTAssertFalse(kind.title.isEmpty)
+            XCTAssertFalse(kind.symbol.isEmpty)
+        }
+    }
+
     func testSpeedTestAddresses() {
         let base = URL(string: "https://speed.cloudflare.com/")!
         XCTAssertEqual(

@@ -31,6 +31,7 @@ final class AppModel {
     private(set) var rules: [AutomationRule] = []
     private(set) var automationEvents: [AutomationEvent] = []
     private(set) var speedTests: [SpeedTestResult] = []
+    private(set) var devices: [Device] = []
     private(set) var notificationAccess = Notifier.Access.unknown
     var errorMessage: String?
 
@@ -66,6 +67,7 @@ final class AppModel {
         refreshProfiles()
         refreshAutomations()
         speedTests = engine.speedTests
+        devices = engine.devices
         snapshot = engine.snapshot
     }
 
@@ -181,6 +183,41 @@ final class AppModel {
 
     func delete(_ profile: Profile) {
         perform { try engine.deleteProfile(id: profile.id) }
+        // Un profil supprimé est détaché des appareils qui le portaient.
+        devices = engine.devices
+        refreshAutomations()
+    }
+
+    func profile(id: String?) -> Profile? {
+        guard let id else { return nil }
+        return profiles.first { $0.id == id }
+    }
+
+    /// Les règles et les appareils qui utilisent ce profil, pour prévenir avant de le supprimer.
+    func usage(of profile: Profile) -> ProfileUsage {
+        engine.profileUsage(id: profile.id)
+    }
+
+    // MARK: Appareils
+
+    /// Enregistre un appareil. Renvoie le message d'erreur, ou `nil` si c'est fait.
+    func saveDevice(_ device: Device) -> String? {
+        do {
+            try engine.saveDevice(device)
+            devices = engine.devices
+            return nil
+        } catch {
+            return Self.describe(error)
+        }
+    }
+
+    func deleteDevice(_ device: Device) {
+        perform { try engine.deleteDevice(id: device.id) }
+        devices = engine.devices
+    }
+
+    func limitStatus(for device: Device) -> ApplyResult? {
+        engine.limitStatus(for: device)
     }
 
     @discardableResult
@@ -286,6 +323,14 @@ final class AppModel {
         engine.usage(from: from, to: to)
     }
 
+    func compareUsage(from: Date, to: Date) -> UsageComparison {
+        engine.compareUsage(from: from, to: to)
+    }
+
+    func exportCSV(from: Date, to: Date, step: HistoryStep) -> String {
+        engine.exportCSV(from: from, to: to, step: step)
+    }
+
     func eraseHistory() {
         perform { try engine.eraseHistory() }
         refreshAutomations()
@@ -298,6 +343,7 @@ final class AppModel {
         perform { try engine.eraseAll() }
         refreshAutomations()
         speedTests = engine.speedTests
+        devices = engine.devices
         latencyHost = Self.defaultLatencyHost
         speedTestServer = SpeedTestRunner.defaultServer
         samples = engine.recentSamples
