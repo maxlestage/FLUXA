@@ -31,6 +31,7 @@ struct DashboardView: View {
                         SpeedTestView()
                     } label: {
                         Label("Tester le débit", systemImage: "speedometer")
+                            .foregroundStyle(Theme.background)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.borderedProminent)
