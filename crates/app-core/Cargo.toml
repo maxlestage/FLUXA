@@ -1,0 +1,17 @@
+[package]
+name = "app-core"
+description = "Façade du moteur FLUXA : coordonne la mesure, les limites, l'historique et les capacités."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+shared-types.workspace = true
+capability-manager.workspace = true
+network-monitor.workspace = true
+bandwidth-manager.workspace = true
+traffic-analytics.workspace = true
+persistence.workspace = true
+
+[lints]
+workspace = true

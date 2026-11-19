@@ -1,0 +1,12 @@
+[package]
+name = "network-monitor"
+description = "Débit, latence, gigue et pertes calculés à partir des relevés fournis par l'adaptateur natif."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+shared-types.workspace = true
+
+[lints]
+workspace = true
