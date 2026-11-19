@@ -1,0 +1,103 @@
+import FluxaCore
+
+// Les noms français de ce que le moteur renvoie.
+
+extension NetworkKind {
+    var title: String {
+        switch self {
+        case .offline: "Hors ligne"
+        case .wifi: "Wi-Fi"
+        case .cellular: "Réseau mobile"
+        case .wired: "Ethernet"
+        case .other: "Autre réseau"
+        }
+    }
+}
+
+extension InterfaceClass {
+    var title: String {
+        switch self {
+        case .wifi: "Wi-Fi"
+        case .cellular: "Réseau mobile"
+        case .wired: "Ethernet"
+        case .other: "Autre"
+        }
+    }
+}
+
+extension ApplyStatus {
+    var title: String {
+        switch self {
+        case .applied: "Appliqué"
+        case .partial: "Partiel"
+        case .simulated: "Simulé"
+        case .unsupported: "Réservé à iOS"
+        }
+    }
+
+    var pill: StatusPill.Kind {
+        switch self {
+        case .applied: .supported
+        case .partial, .simulated: .simulated
+        case .unsupported: .reserved
+        }
+    }
+}
+
+extension Support {
+    var title: String {
+        switch self {
+        case .supported: "Pris en charge"
+        case .conditional: "Sous conditions"
+        case .unsupported: "Réservé à iOS"
+        }
+    }
+
+    var pill: StatusPill.Kind {
+        switch self {
+        case .supported: .supported
+        case .conditional: .simulated
+        case .unsupported: .reserved
+        }
+    }
+}
+
+extension LimitMode {
+    var title: String {
+        switch self {
+        case .hardLimit: "Plafond strict"
+        case .softLimit: "Débit cible"
+        case .fairShare: "Partage équitable"
+        case .priority: "Priorités"
+        case .scheduled: "Plage horaire"
+        case .emergency: "Réduction d’urgence"
+        }
+    }
+}
+
+extension Capability {
+    var title: String {
+        switch self {
+        case .internetMonitoring: "Mesurer la connexion de l’iPhone"
+        case .speedTest: "Tester le débit Internet"
+        case .charts: "Tracer les graphiques et l’historique"
+        case .profiles: "Gérer des profils de débit"
+        case .localVPN: "Créer un VPN local facultatif"
+        case .hotspotActivation: "Activer le partage depuis une app"
+        case .hotspotClientDiscovery: "Identifier les appareils connectés"
+        case .hotspotLimit: "Limiter le débit du partage"
+        case .perDeviceShaping: "Limiter un appareil en particulier"
+        case .clientDisconnect: "Déconnecter un appareil du partage"
+        }
+    }
+}
+
+extension EngineEvent.Level {
+    var title: String {
+        switch self {
+        case .info: "Info"
+        case .warning: "Attention"
+        case .error: "Erreur"
+        }
+    }
+}
