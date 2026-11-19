@@ -183,7 +183,7 @@ public final class SQLiteStore: EngineStore {
         }
     }
 
-    private static let schemaV1 = """
+    static let schemaV1 = """
         CREATE TABLE app_settings (
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
