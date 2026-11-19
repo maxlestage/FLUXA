@@ -6,6 +6,8 @@ struct DiagnosticsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        // L'écran se relit quand l'historique ou les limites changent.
+        let _ = model.historyRevision
         let diagnostics = model.diagnostics
 
         List {
@@ -14,6 +16,7 @@ struct DiagnosticsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(alignment: .firstTextBaseline) {
                             Text(status.capability.title)
+                                .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 12)
                             StatusPill(status.support.pill, status.support.title)
                         }
