@@ -1,0 +1,18 @@
+{
+  "name": "FLUXA",
+  "description": "Le site de présentation de FLUXA, le moniteur de connexion pour iPhone, servi par un petit serveur Rust.",
+  "website": "https://fluxa-app-ded0024c2b45.herokuapp.com/",
+  "logo": "https://fluxa-app-ded0024c2b45.herokuapp.com/assets/favicon.svg",
+  "keywords": [
+    "rust",
+    "site",
+    "ios"
+  ],
+  "stack": "heroku-26",
+  "buildpacks": [
+    {
+      "url": "emk/rust"
+    }
+  ],
+  "success_url": "/"
+}
