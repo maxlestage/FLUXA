@@ -208,10 +208,12 @@ final class FluxaUITests: XCTestCase {
         let erase = button(startingWith: "Effacer l")
         XCTAssertTrue(scroll(to: erase.firstMatch))
         erase.firstMatch.tap()
-        // La confirmation propose le même libellé : c'est le dernier bouton apparu.
         XCTAssertTrue(element(containing: "Vos profils sont conservés").waitForExistence(timeout: 5))
-        let buttons = button(startingWith: "Effacer l")
-        buttons.element(boundBy: buttons.count - 1).tap()
+        // La confirmation propose le même libellé. Le bouton de la page est masqué par elle :
+        // celui qu'on peut toucher est le sien.
+        let confirm = button(startingWith: "Effacer l").allElementsBoundByIndex.last { $0.isHittable }
+        XCTAssertNotNil(confirm, "le bouton de confirmation n'est pas touchable")
+        confirm?.tap()
         assertNoError()
         XCTAssertTrue(app.navigationBars["Réglages"].exists)
     }
