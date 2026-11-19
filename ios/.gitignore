@@ -1,0 +1,9 @@
+# Écrits par `xcodegen generate`.
+*.xcodeproj
+App/Info.plist
+# Construction.
+build/
+.build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
