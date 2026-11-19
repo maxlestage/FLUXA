@@ -26,6 +26,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 paquets = { git = "https://github.com/maxlestage/Paquets", default-features = false, features = ["client"] }
 wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 web-sys = { version = "0.3", features = [
   "CanvasGradient",
@@ -36,6 +37,9 @@ web-sys = { version = "0.3", features = [
   "HtmlCanvasElement",
   "HtmlElement",
   "MediaQueryList",
+  "Navigator",
+  "ServiceWorker",
+  "ServiceWorkerContainer",
   "Window",
 ] }
 

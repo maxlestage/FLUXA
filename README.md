@@ -37,7 +37,8 @@ enregistré et simulé sur le débit mesuré ; son statut reste « Simulé », j
 
 Une application [Paquets](https://github.com/maxlestage/Paquets) : pages rendues par le serveur,
 trois îlots en WebAssembly (menu, tableau de bord animé, laboratoire des profils), export
-statique pour GitHub Pages. Voir [`site/README.md`](site/README.md).
+statique pour GitHub Pages. Il s'installe comme une application (PWA), se lit hors ligne, et
+chaque lien partagé affiche sa carte. Voir [`site/README.md`](site/README.md).
 
 ```sh
 ./heroku-build.sh                          # le serveur et les îlots
