@@ -5,6 +5,8 @@ import SwiftUI
 struct ProfilesView: View {
     @Environment(AppModel.self) private var model
     @State private var draft: ProfileDraft?
+    /// Le profil dont la suppression attend une confirmation, parce qu'il est utilisé ailleurs.
+    @State private var pendingDeletion: Profile?
 
     var body: some View {
         NavigationStack {
@@ -24,7 +26,11 @@ struct ProfilesView: View {
                         .swipeActions(edge: .trailing) {
                             if !profile.isBuiltin {
                                 Button(role: .destructive) {
-                                    model.delete(profile)
+                                    if model.usage(of: profile).isEmpty {
+                                        model.delete(profile)
+                                    } else {
+                                        pendingDeletion = profile
+                                    }
                                 } label: {
                                     Label("Supprimer", systemImage: "trash")
                                 }
@@ -70,7 +76,40 @@ struct ProfilesView: View {
             .sheet(item: $draft) { draft in
                 ProfileEditor(draft: draft)
             }
+            .confirmationDialog(
+                "Supprimer « \(pendingDeletion?.name ?? "") » ?",
+                isPresented: Binding(
+                    get: { pendingDeletion != nil },
+                    set: { if !$0 { pendingDeletion = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: pendingDeletion
+            ) { profile in
+                Button("Supprimer le profil", role: .destructive) {
+                    model.delete(profile)
+                }
+            } message: { profile in
+                Text(Self.warning(for: model.usage(of: profile)))
+            }
         }
+    }
+
+    /// Ce que la suppression d'un profil utilisé entraîne.
+    static func warning(for usage: ProfileUsage) -> String {
+        var parts: [String] = []
+        if !usage.ruleNames.isEmpty {
+            let names = usage.ruleNames.joined(separator: ", ")
+            parts.append(usage.ruleNames.count == 1
+                ? "La règle \(names) le choisit : elle ne changera plus de profil."
+                : "Les règles \(names) le choisissent : elles ne changeront plus de profil.")
+        }
+        if !usage.deviceNames.isEmpty {
+            let names = usage.deviceNames.joined(separator: ", ")
+            parts.append(usage.deviceNames.count == 1
+                ? "L’appareil \(names) n’aura plus de profil."
+                : "Les appareils \(names) n’auront plus de profil.")
+        }
+        return parts.joined(separator: " ")
     }
 
     /// Ce qui est enregistré, et ce que le système en fait.

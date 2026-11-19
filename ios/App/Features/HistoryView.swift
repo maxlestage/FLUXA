@@ -1,6 +1,8 @@
 import Charts
+import CoreTransferable
 import FluxaCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// L'historique : le débit et la consommation sur une heure, un jour ou un mois.
 struct HistoryView: View {
@@ -51,7 +53,8 @@ struct HistoryView: View {
         let now = Date()
         let start = now.addingTimeInterval(-period.interval)
         let aggregates = model.history(from: start, to: now, step: period.step)
-        let usage = model.usage(from: start, to: now)
+        let comparison = model.compareUsage(from: start, to: now)
+        let usage = comparison.current
 
         NavigationStack {
             ScrollView {
@@ -96,6 +99,20 @@ struct HistoryView: View {
                         }
                     }
 
+                    Card {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Eyebrow("Par rapport à la période précédente")
+                            Text(Self.change(comparison))
+                                .font(.title3.monospacedDigit().weight(.semibold))
+                                .foregroundStyle(Theme.text)
+                            Text(Self.previousDetail(comparison))
+                                .font(.footnote)
+                                .foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("comparaison")
+
                     Text("Conservation : 7 jours pour les minutes, 30 jours pour les heures, 12 mois pour les jours.")
                         .font(.footnote)
                         .foregroundStyle(Theme.tertiary)
@@ -104,7 +121,40 @@ struct HistoryView: View {
             }
             .background(Theme.background)
             .navigationTitle("Historique")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    ShareLink(
+                        item: HistoryExport(csv: model.exportCSV(from: start, to: now, step: period.step)),
+                        preview: SharePreview("Historique FLUXA, \(period.title)")
+                    ) {
+                        Label("Exporter", systemImage: "square.and.arrow.up")
+                    }
+                    .disabled(aggregates.isEmpty)
+                }
+            }
         }
+    }
+
+    /// La variation du volume, en une phrase.
+    static func change(_ comparison: UsageComparison) -> String {
+        guard let percent = comparison.changePercent else {
+            return "Rien à comparer"
+        }
+        let rounded = percent.rounded()
+        if rounded == 0 {
+            return "Volume stable"
+        }
+        let sign = rounded > 0 ? "+" : "−"
+        return "\(sign)\(Format.number(abs(rounded), digits: 0))\u{00A0}% de volume"
+    }
+
+    static func previousDetail(_ comparison: UsageComparison) -> String {
+        guard comparison.changePercent != nil else {
+            return "La période précédente n’a pas de mesure."
+        }
+        let before = comparison.previous.receivedBytes + comparison.previous.sentBytes
+        let now = comparison.current.receivedBytes + comparison.current.sentBytes
+        return "\(Format.bytes(now)) sur cette période, \(Format.bytes(before)) sur la précédente."
     }
 
     private func chart(_ aggregates: [Aggregate]) -> some View {
@@ -171,5 +221,17 @@ private struct SummaryRow: View {
                 .font(.body.monospacedDigit())
                 .gridColumnAlignment(.trailing)
         }
+    }
+}
+
+/// L'historique exporté : un fichier CSV, lisible par un tableur.
+struct HistoryExport: Transferable {
+    let csv: String
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .commaSeparatedText) { export in
+            Data(export.csv.utf8)
+        }
+        .suggestedFileName("fluxa-historique.csv")
     }
 }

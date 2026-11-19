@@ -253,6 +253,11 @@ public final class FluxaEngine {
             throw FluxaError.builtinProfile(id: id)
         }
         state.profiles.remove(at: index)
+        // Les appareils qui avaient ce profil n'en ont plus. Une règle qui le choisit
+        // le signalera à son déclenchement.
+        for deviceIndex in state.devices.indices where state.devices[deviceIndex].profileID == id {
+            state.devices[deviceIndex].profileID = nil
+        }
         if state.activeProfileID == id {
             // La limite du profil disparaît avec lui.
             state.activeProfileID = nil
@@ -324,6 +329,12 @@ public final class FluxaEngine {
     }
 
     public func usage(from: Date, to: Date) -> UsageSummary {
+        measuredUsage(from: from, to: to).summary
+    }
+
+    /// Le bilan d'une période, et s'il repose sur au moins une mesure : « rien de
+    /// mesuré » et « zéro octet mesuré » ne sont pas la même chose.
+    func measuredUsage(from: Date, to: Date) -> (summary: UsageSummary, hasMeasures: Bool) {
         // La suite la plus fine qui couvre encore le début de la période.
         let date = now()
         let step: HistoryStep
@@ -335,12 +346,12 @@ public final class FluxaEngine {
             step = .day
         }
         let buckets = series(for: step).slice(from: from, to: to)
-        guard let first = buckets.first else { return UsageSummary() }
+        guard let first = buckets.first else { return (UsageSummary(), false) }
         var total = Bucket(start: first.start)
         for bucket in buckets {
             total.merge(bucket)
         }
-        return UsageSummary(
+        let summary = UsageSummary(
             receivedBytes: total.receivedBytes,
             sentBytes: total.sentBytes,
             averageDownloadBps: total.averageDownloadBps,
@@ -348,6 +359,7 @@ public final class FluxaEngine {
             peakDownloadBps: total.peakDownloadBps,
             peakUploadBps: total.peakUploadBps
         )
+        return (summary, true)
     }
 
     // MARK: Données
@@ -591,6 +603,9 @@ public struct EngineState: Codable, Equatable, Sendable {
     var nextAutomationEventID = 1
     /// Les tests de débit, du plus récent au plus ancien.
     var speedTests: [SpeedTestResult] = []
+    /// Les appareils notés par l'utilisateur, dans l'ordre de leur ajout.
+    var devices: [Device] = []
+    var nextDeviceNumber = 1
 
     public init() {}
 
@@ -598,6 +613,7 @@ public struct EngineState: Codable, Equatable, Sendable {
         case version, profiles, nextProfileNumber, activeProfileID, lastApplyResult, policyLog
         case minutes, hours, days
         case rules, nextRuleNumber, activations, automationLog, nextAutomationEventID, speedTests
+        case devices, nextDeviceNumber
     }
 
     // Un champ absent prend sa valeur par défaut : un fichier écrit par une version
@@ -625,6 +641,8 @@ public struct EngineState: Codable, Equatable, Sendable {
         nextAutomationEventID =
             try values.decodeIfPresent(Int.self, forKey: .nextAutomationEventID) ?? 1
         speedTests = try values.decodeIfPresent([SpeedTestResult].self, forKey: .speedTests) ?? []
+        devices = try values.decodeIfPresent([Device].self, forKey: .devices) ?? []
+        nextDeviceNumber = try values.decodeIfPresent(Int.self, forKey: .nextDeviceNumber) ?? 1
     }
 
     /// Remet les sept préréglages en tête, dans leur ordre. Un préréglage déjà présent
@@ -646,6 +664,16 @@ public struct EngineState: Codable, Equatable, Sendable {
         if activeProfileID.map({ id in !profiles.contains { $0.id == id } }) ?? false {
             activeProfileID = nil
         }
+    }
+
+    /// Un identifiant neuf pour un appareil : `device-1`, `device-2`… jamais réutilisé.
+    mutating func makeDeviceID() -> String {
+        var id: String
+        repeat {
+            id = "device-\(nextDeviceNumber)"
+            nextDeviceNumber += 1
+        } while devices.contains { $0.id == id }
+        return id
     }
 
     /// Un identifiant neuf pour une règle : `rule-1`, `rule-2`… jamais réutilisé.
