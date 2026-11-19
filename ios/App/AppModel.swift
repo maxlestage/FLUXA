@@ -56,10 +56,8 @@ final class AppModel {
     private static let speedTestServerKey = "speedTestServer"
 
     init() {
-        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        engine = FluxaEngine(store: FileStore(url: folder.appendingPathComponent("fluxa.json")))
+        let opened = Self.openStore()
+        engine = FluxaEngine(store: opened.store)
         latencyHost = UserDefaults.standard.string(forKey: Self.latencyHostKey) ?? Self.defaultLatencyHost
         notifiesAutomations = UserDefaults.standard.bool(forKey: Self.notifiesKey)
         speedTestServer = UserDefaults.standard.string(forKey: Self.speedTestServerKey)
@@ -69,6 +67,32 @@ final class AppModel {
         speedTests = engine.speedTests
         devices = engine.devices
         snapshot = engine.snapshot
+        // Un souci à l'ouverture de la base est dit dès le premier écran.
+        errorMessage = opened.problem
+    }
+
+    /// Ouvre la base SQLite de l'app. Les mesures d'une version précédente, gardées dans
+    /// un fichier JSON, y sont reprises au premier lancement.
+    ///
+    /// Si la base ne peut pas être ouverte, l'app continue avec un fichier à part plutôt
+    /// que de ne rien enregistrer, et le dit.
+    private static func openStore() -> (store: any EngineStore, problem: String?) {
+        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let legacy = folder.appendingPathComponent("fluxa.json")
+        do {
+            let store = try SQLiteStore(url: folder.appendingPathComponent("fluxa.sqlite"))
+            // Un ancien fichier illisible est laissé en place : rien n'est perdu.
+            _ = try? store.importLegacyFile(at: legacy)
+            return (store, nil)
+        } catch {
+            let reason = describe(error)
+            return (
+                FileStore(url: folder.appendingPathComponent("fluxa-secours.json")),
+                "La base de données de FLUXA n’a pas pu être ouverte (\(reason)). Les mesures de cette session sont enregistrées à part."
+            )
+        }
     }
 
     var activeProfile: Profile? {

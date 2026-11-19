@@ -1,3 +1,5 @@
+# La signature de chacun (voir Config/Signing.local.xcconfig.example).
+Config/Signing.local.xcconfig
 # Écrits par `xcodegen generate`.
 *.xcodeproj
 App/Info.plist

@@ -10,6 +10,12 @@ options:
   createIntermediateGroups: true
   generateEmptyDirectories: false
 
+# L'identifiant de l'app et la signature viennent de Config/App.xcconfig, que complète
+# un fichier local Config/Signing.local.xcconfig (voir ios/README.md).
+configFiles:
+  Debug: Config/App.xcconfig
+  Release: Config/App.xcconfig
+
 packages:
   # La logique de l'app, en Swift pur, testée à part (`swift test`).
   FluxaCore:
@@ -28,6 +34,8 @@ targets:
       properties:
         CFBundleDisplayName: FLUXA
         CFBundleDevelopmentRegion: fr
+        CFBundleLocalizations:
+          - fr
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true
@@ -40,8 +48,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:
-        # Identifiant provisoire : à remplacer par celui du compte développeur.
-        PRODUCT_BUNDLE_IDENTIFIER: app.fluxa.ios
+        PRODUCT_BUNDLE_IDENTIFIER: $(FLUXA_BUNDLE_ID)
         PRODUCT_NAME: Fluxa
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
@@ -60,7 +67,7 @@ targets:
       - target: Fluxa
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.fluxa.ios.tests
+        PRODUCT_BUNDLE_IDENTIFIER: $(FLUXA_BUNDLE_ID).tests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "5.0"
 
@@ -74,7 +81,7 @@ targets:
       - target: Fluxa
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.fluxa.ios.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: $(FLUXA_BUNDLE_ID).uitests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "5.0"
         TEST_TARGET_NAME: Fluxa
@@ -93,3 +100,5 @@ schemes:
       targets:
         - FluxaTests
         - FluxaUITests
+    archive:
+      config: Release

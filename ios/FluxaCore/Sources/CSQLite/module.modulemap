@@ -1,0 +1,6 @@
+// SQLite du système, pour Linux. Sur les plateformes Apple, le SDK fournit `SQLite3`.
+module CSQLite [system] {
+    header "shim.h"
+    link "sqlite3"
+    export *
+}
