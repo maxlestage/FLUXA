@@ -11,6 +11,8 @@ import Observation
 final class AppModel {
     private let engine: FluxaEngine
     private let pathMonitor = PathMonitor()
+    private let notifier = Notifier()
+    let speedTest = SpeedTestRunner()
     private var sampling: Task<Void, Never>?
     private var ticks = 0
     private var probing = false
@@ -24,7 +26,23 @@ final class AppModel {
     private(set) var lastApply: ApplyResult?
     /// Change à chaque écriture dans l'historique, pour que les écrans le relisent.
     private(set) var historyRevision = 0
+    /// Un signe indirect que le partage de connexion est en service (voir `InterfaceCounters`).
+    private(set) var sharingDetected = false
+    private(set) var rules: [AutomationRule] = []
+    private(set) var automationEvents: [AutomationEvent] = []
+    private(set) var speedTests: [SpeedTestResult] = []
+    private(set) var notificationAccess = Notifier.Access.unknown
     var errorMessage: String?
+
+    /// Prévenir par une notification quand une règle se déclenche.
+    var notifiesAutomations: Bool {
+        didSet { UserDefaults.standard.set(notifiesAutomations, forKey: Self.notifiesKey) }
+    }
+
+    /// L'adresse du serveur du test de débit. Réglable dans les réglages.
+    var speedTestServer: String {
+        didSet { UserDefaults.standard.set(speedTestServer, forKey: Self.speedTestServerKey) }
+    }
 
     /// L'hôte de la sonde de latence. Réglable dans les réglages.
     var latencyHost: String {
@@ -33,6 +51,8 @@ final class AppModel {
 
     static let defaultLatencyHost = "www.apple.com"
     private static let latencyHostKey = "latencyHost"
+    private static let notifiesKey = "notifiesAutomations"
+    private static let speedTestServerKey = "speedTestServer"
 
     init() {
         let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -40,7 +60,12 @@ final class AppModel {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         engine = FluxaEngine(store: FileStore(url: folder.appendingPathComponent("fluxa.json")))
         latencyHost = UserDefaults.standard.string(forKey: Self.latencyHostKey) ?? Self.defaultLatencyHost
+        notifiesAutomations = UserDefaults.standard.bool(forKey: Self.notifiesKey)
+        speedTestServer = UserDefaults.standard.string(forKey: Self.speedTestServerKey)
+            ?? SpeedTestRunner.defaultServer
         refreshProfiles()
+        refreshAutomations()
+        speedTests = engine.speedTests
         snapshot = engine.snapshot
     }
 
@@ -102,6 +127,8 @@ final class AppModel {
         #endif
         snapshot = engine.ingest(interfaces)
         samples = engine.recentSamples
+        sharingDetected = InterfaceCounters.sharingInterfaceIsUp()
+        runAutomations()
         ticks += 1
         if ticks % 60 == 0 {
             historyRevision += 1
@@ -179,6 +206,76 @@ final class AppModel {
         engine.policyLog(limit: limit)
     }
 
+    // MARK: Automatisations
+
+    private func refreshAutomations() {
+        rules = engine.automationRules
+        automationEvents = engine.automationLog(limit: 30)
+    }
+
+    /// Évalue les règles sur l'état du moment, et signale ce qu'elles viennent de faire.
+    private func runAutomations() {
+        let events = engine.evaluateAutomations()
+        guard !events.isEmpty else { return }
+        refreshProfiles()
+        refreshAutomations()
+        if notifiesAutomations {
+            notifier.post(events)
+        }
+    }
+
+    /// Enregistre une règle. Renvoie le message d'erreur, ou `nil` si c'est fait.
+    func saveRule(_ rule: AutomationRule) -> String? {
+        do {
+            try engine.saveRule(rule)
+            refreshAutomations()
+            runAutomations()
+            return nil
+        } catch {
+            return Self.describe(error)
+        }
+    }
+
+    func deleteRule(_ rule: AutomationRule) {
+        perform { try engine.deleteRule(id: rule.id) }
+        refreshAutomations()
+    }
+
+    func setRule(_ rule: AutomationRule, enabled: Bool) {
+        var changed = rule
+        changed.isEnabled = enabled
+        if let problem = saveRule(changed) {
+            errorMessage = problem
+        }
+        refreshProfiles()
+    }
+
+    func refreshNotificationAccess() async {
+        notificationAccess = await notifier.access()
+    }
+
+    /// Active ou coupe les notifications. L'autorisation du système est demandée à la
+    /// première activation ; si elle est refusée, l'option reste coupée.
+    func setNotifications(_ enabled: Bool) async {
+        guard enabled else {
+            notifiesAutomations = false
+            return
+        }
+        let granted = await notifier.requestAccess()
+        notificationAccess = await notifier.access()
+        notifiesAutomations = granted
+    }
+
+    // MARK: Test de débit
+
+    func startSpeedTest() {
+        speedTest.start(server: speedTestServer, networkKind: path.kind) { [weak self] result in
+            guard let self else { return }
+            self.engine.recordSpeedTest(result)
+            self.speedTests = self.engine.speedTests
+        }
+    }
+
     // MARK: Historique et données
 
     func history(from: Date, to: Date, step: HistoryStep) -> [Aggregate] {
@@ -191,13 +288,18 @@ final class AppModel {
 
     func eraseHistory() {
         perform { try engine.eraseHistory() }
+        refreshAutomations()
+        speedTests = engine.speedTests
         samples = engine.recentSamples
         snapshot = engine.snapshot
     }
 
     func eraseAll() {
         perform { try engine.eraseAll() }
+        refreshAutomations()
+        speedTests = engine.speedTests
         latencyHost = Self.defaultLatencyHost
+        speedTestServer = SpeedTestRunner.defaultServer
         samples = engine.recentSamples
         snapshot = engine.snapshot
     }

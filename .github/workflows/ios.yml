@@ -118,6 +118,8 @@ jobs:
           shot 6-historique -fluxaTab historique
           shot 7-reglages -fluxaTab reglages
           shot 8-diagnostic -fluxaScreen diagnostic
+          shot 9-test-de-debit -fluxaScreen test
+          shot 10-automatisations -fluxaScreen automatisations
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -60,6 +60,10 @@ struct RootView: View {
             NavigationStack { LimiterView() }
         case "diagnostic":
             NavigationStack { DiagnosticsView() }
+        case "test":
+            NavigationStack { SpeedTestView() }
+        case "automatisations":
+            NavigationStack { AutomationsView() }
         default:
             tabs
         }

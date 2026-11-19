@@ -156,6 +156,8 @@ extension FluxaError: LocalizedError {
             return "Ce profil n’existe plus."
         case .builtinProfile:
             return "Un préréglage se modifie, mais ne se supprime pas."
+        case .invalidRule(let reason):
+            return reason
         case .store(let detail):
             return "Les données n’ont pas pu être enregistrées : \(detail)"
         }

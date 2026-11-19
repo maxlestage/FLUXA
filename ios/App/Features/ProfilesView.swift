@@ -49,6 +49,11 @@ struct ProfilesView: View {
                     } label: {
                         Label("Limiteur de débit", systemImage: "gauge.with.dots.needle.33percent")
                     }
+                    NavigationLink {
+                        AutomationsView()
+                    } label: {
+                        Label("Automatisations", systemImage: "clock.arrow.2.circlepath")
+                    }
                 }
             }
             .fluxaBackground()
