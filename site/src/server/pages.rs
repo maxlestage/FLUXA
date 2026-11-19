@@ -520,7 +520,7 @@ fn privacy_section() -> Element {
                                         ))
                                         .child(commitment(
                                             "Informations sensibles chiffrées",
-                                            "Dans le stockage local de l’iPhone.",
+                                            "Par la protection des fichiers d’iOS, dans le stockage de l’app.",
                                         ))
                                         .child(
                                             commitment(
@@ -576,16 +576,13 @@ fn stack_link() -> Element {
 
 fn technology() -> Element {
     let modules = [
-        "Network Monitor",
-        "Bandwidth Manager",
-        "Traffic Analytics",
-        "Policy Engine",
-        "Profile Manager",
-        "Scheduler",
-        "Alert Manager",
-        "Capability Manager",
-        "Device Registry",
-        "Diagnostics",
+        "Mesure du débit",
+        "Latence et gigue",
+        "Profils",
+        "Limites et simulation",
+        "Capacités",
+        "Historique",
+        "Diagnostic",
     ];
     let goals = [
         ("Démarrage du moteur", "< 500 ms"),
@@ -603,9 +600,9 @@ fn technology() -> Element {
                 .child(section_head(
                     "Sous le capot",
                     "h-technologie",
-                    "Un moteur Rust sous une interface SwiftUI",
+                    "Une app en Swift natif, de l’interface au moteur",
                     Some(
-                        "La logique de mesure et de règles vit dans un moteur en Rust, testé sans l’interface. Tout ce qui touche au système passe par les API natives d’Apple.",
+                        "L’interface est en SwiftUI. La logique de mesure et de règles vit dans un paquet Swift à part, testé sans l’interface. Tout ce qui touche au système passe par les API natives d’Apple.",
                     ),
                 ))
                 .child(
@@ -623,25 +620,24 @@ fn technology() -> Element {
                                         .child(p().text("Écrans natifs et graphiques Swift Charts.")),
                                 )
                                 .child(stack_link())
-                                .child(layer("t-uniffi", "Pont", "UniFFI").child(p().text(
-                                    "Une API typée entre Swift et Rust. Chaque valeur est validée avant d’atteindre le moteur.",
-                                )))
-                                .child(stack_link())
                                 .child(
-                                    layer("t-rust", "Moteur", "Rust")
+                                    layer("t-moteur", "Moteur", "FluxaCore")
                                         .class("stack__layer--core")
+                                        .child(p().text(
+                                            "Un paquet Swift sans interface : chaque valeur est validée, chaque limite reçoit son statut réel.",
+                                        ))
                                         .child(
                                             ul().class("stack__mods")
                                                 .children(modules.map(|module| li().text(module)))
                                                 .child(
-                                                    li().id("t-sqlite")
-                                                        .text("Persistence · SQLite"),
+                                                    li().id("t-stockage")
+                                                        .text("Stockage local"),
                                                 ),
                                         ),
                                 )
                                 .child(stack_link())
                                 .child(layer("t-ios", "Système", "Adaptateur iOS").child(p().text(
-                                    "Network.framework, et NetworkExtension pour les seules fonctions qu’Apple autorise.",
+                                    "Network.framework pour le type de réseau et la latence, les compteurs d’octets des interfaces, CoreTelephony pour la 4G et la 5G.",
                                 ))),
                         )
                         .child(
@@ -881,10 +877,10 @@ const FOOTER: [(&str, &[(&str, &str)]); 6] = [
     (
         "Technologie",
         &[
-            ("#t-rust", "Moteur Rust"),
+            ("#technologie", "Swift natif"),
             ("#t-swiftui", "Interface SwiftUI"),
-            ("#t-uniffi", "Pont UniFFI"),
-            ("#t-sqlite", "Base locale SQLite"),
+            ("#t-moteur", "Moteur FluxaCore"),
+            ("#t-stockage", "Stockage local"),
             ("#t-ios", "Adaptateur iOS"),
         ],
     ),
@@ -941,7 +937,7 @@ fn site_footer(ctx: &Ctx) -> Element {
         ),
         (
             "Marques.",
-            " Apple, iPhone, iOS, App Store, TestFlight, SwiftUI et Swift sont des marques d’Apple Inc., déposées aux États-Unis et dans d’autres pays. Rust est une marque de la Rust Foundation. FLUXA n’est ni affilié à Apple ni approuvé par Apple.",
+            " Apple, iPhone, iOS, App Store, TestFlight, SwiftUI et Swift sont des marques d’Apple Inc., déposées aux États-Unis et dans d’autres pays. FLUXA n’est ni affilié à Apple ni approuvé par Apple.",
         ),
     ];
     let legal = [
@@ -1116,7 +1112,7 @@ pub fn privacy(ctx: &Ctx) -> Page {
                 "vos préférences.",
             ]),
             Block::Text(
-                "Ces données sont stockées dans une base SQLite sur l’appareil. Les informations sensibles sont chiffrées.",
+                "Ces données sont stockées dans un fichier sur l’appareil, protégé par le chiffrement d’iOS.",
             ),
             Block::Title("jamais", "Ce que FLUXA ne collecte pas"),
             Block::List(&[
@@ -1188,7 +1184,7 @@ pub fn legal(ctx: &Ctx) -> Page {
             ),
             Block::Title("marques", "Marques"),
             Block::Text(
-                "Apple, iPhone, iOS, App Store, TestFlight, SwiftUI et Swift sont des marques d’Apple Inc., déposées aux États-Unis et dans d’autres pays. Rust est une marque de la Rust Foundation. FLUXA n’est ni affilié à Apple ni approuvé par Apple.",
+                "Apple, iPhone, iOS, App Store, TestFlight, SwiftUI et Swift sont des marques d’Apple Inc., déposées aux États-Unis et dans d’autres pays. FLUXA n’est ni affilié à Apple ni approuvé par Apple.",
             ),
             Block::Title("liens", "Liens externes"),
             Block::Text(
