@@ -112,9 +112,10 @@ final class AppModel {
     }
 
     private func probeLatency() {
-        guard !probing, path.isOnline else { return }
+        // Sans hôte, pas de sonde : une absence de réglage n'est pas une perte de paquets.
+        let host = latencyHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !probing, path.isOnline, !host.isEmpty else { return }
         probing = true
-        let host = latencyHost
         Task { [weak self] in
             let milliseconds = await LatencyProbe.measure(host: host)
             guard let self else { return }
@@ -137,11 +138,17 @@ final class AppModel {
         perform { _ = try engine.activateProfile(id: profile.id) }
     }
 
-    /// Renvoie `true` si le profil est enregistré.
-    @discardableResult
-    func saveProfile(id: String?, name: String, downloadMbps: Double?, uploadMbps: Double?) -> Bool {
-        perform {
+    /// Enregistre un profil. Renvoie le message d'erreur, ou `nil` si c'est fait.
+    ///
+    /// L'erreur revient à l'appelant au lieu de passer par l'alerte générale : la saisie se
+    /// fait dans une feuille, au-dessus de laquelle cette alerte ne s'afficherait pas.
+    func saveProfile(id: String?, name: String, downloadMbps: Double?, uploadMbps: Double?) -> String? {
+        do {
             _ = try engine.saveProfile(id: id, name: name, downloadMbps: downloadMbps, uploadMbps: uploadMbps)
+            refreshProfiles()
+            return nil
+        } catch {
+            return Self.describe(error)
         }
     }
 
