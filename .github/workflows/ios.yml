@@ -64,7 +64,7 @@ jobs:
         working-directory: ios
         continue-on-error: true
         # Le premier démarrage d'un simulateur peut durer plusieurs minutes sur un runner.
-        timeout-minutes: 12
+        timeout-minutes: 15
         run: |
           set -euxo pipefail
           device=$(xcrun simctl list devices available -j | python3 -c "
@@ -81,10 +81,24 @@ jobs:
           xcrun simctl boot "$device"
           xcrun simctl bootstatus "$device" -b
           xcrun simctl install "$device" build/Build/Products/Debug-iphonesimulator/Fluxa.app
-          xcrun simctl launch "$device" app.fluxa.ios
           mkdir -p screenshots
-          sleep 15
-          xcrun simctl io "$device" screenshot screenshots/dashboard.png
+          # Le tableau de bord, assez longtemps pour qu'une minute entre dans l'historique.
+          xcrun simctl launch "$device" app.fluxa.ios
+          sleep 75
+          xcrun simctl io "$device" screenshot screenshots/1-tableau-de-bord.png
+          shot() {
+            xcrun simctl terminate "$device" app.fluxa.ios || true
+            xcrun simctl launch "$device" app.fluxa.ios "$2" "$3"
+            sleep 6
+            xcrun simctl io "$device" screenshot "screenshots/$1.png"
+          }
+          shot 2-mon-reseau -fluxaScreen reseau
+          shot 3-partage -fluxaTab partage
+          shot 4-profils -fluxaTab profils
+          shot 5-limiteur -fluxaScreen limiteur
+          shot 6-historique -fluxaTab historique
+          shot 7-reglages -fluxaTab reglages
+          shot 8-diagnostic -fluxaScreen diagnostic
       - uses: actions/upload-artifact@v4
         if: always()
         with:

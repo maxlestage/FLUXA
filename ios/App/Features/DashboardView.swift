@@ -118,6 +118,7 @@ struct DashboardView: View {
                     }
                 }
                 .chartXAxis(.hidden)
+                .chartYScale(domain: 0...chartCeiling)
                 .chartYAxis {
                     AxisMarks(position: .leading) { _ in
                         AxisGridLine().foregroundStyle(Theme.line)
@@ -128,6 +129,13 @@ struct DashboardView: View {
                 .accessibilityLabel("Débits descendant et montant de la dernière minute, en mégabits par seconde")
             }
         }
+    }
+
+    /// Le haut de l'échelle de la courbe, en Mb/s : un peu au-dessus du plus fort débit,
+    /// et jamais moins d'un mégabit pour qu'un débit nul reste posé en bas.
+    private var chartCeiling: Double {
+        let peak = model.samples.map { max($0.downloadBps, $0.uploadBps) }.max() ?? 0
+        return max(1, peak / 1_000_000 * 1.15)
     }
 
     private var profile: some View {
