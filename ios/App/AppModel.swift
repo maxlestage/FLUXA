@@ -137,11 +137,17 @@ final class AppModel {
         perform { _ = try engine.activateProfile(id: profile.id) }
     }
 
-    /// Renvoie `true` si le profil est enregistré.
-    @discardableResult
-    func saveProfile(id: String?, name: String, downloadMbps: Double?, uploadMbps: Double?) -> Bool {
-        perform {
+    /// Enregistre un profil. Renvoie le message d'erreur, ou `nil` si c'est fait.
+    ///
+    /// L'erreur revient à l'appelant au lieu de passer par l'alerte générale : la saisie se
+    /// fait dans une feuille, au-dessus de laquelle cette alerte ne s'afficherait pas.
+    func saveProfile(id: String?, name: String, downloadMbps: Double?, uploadMbps: Double?) -> String? {
+        do {
             _ = try engine.saveProfile(id: id, name: name, downloadMbps: downloadMbps, uploadMbps: uploadMbps)
+            refreshProfiles()
+            return nil
+        } catch {
+            return Self.describe(error)
         }
     }
 
