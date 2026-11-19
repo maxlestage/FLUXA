@@ -1,0 +1,15 @@
+[package]
+name = "persistence"
+description = "Base locale SQLite du moteur FLUXA : mesures, agrégats, profils, règles et préférences."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+shared-types.workspace = true
+traffic-analytics.workspace = true
+bandwidth-manager.workspace = true
+rusqlite.workspace = true
+
+[lints]
+workspace = true

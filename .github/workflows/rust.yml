@@ -1,0 +1,41 @@
+# Moteur Rust (workspace racine : crates/ et bindings/) : format, clippy, tests.
+# Le site (site/) est une crate à part, avec son propre workflow.
+
+name: Rust
+
+on:
+  push:
+    paths-ignore:
+      - "site/**"
+      - "public/**"
+      - "**.md"
+  pull_request:
+    paths-ignore:
+      - "site/**"
+      - "public/**"
+      - "**.md"
+  workflow_dispatch:
+
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  engine:
+    name: Engine (fmt, clippy, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Tests
+        run: cargo test --workspace --locked
