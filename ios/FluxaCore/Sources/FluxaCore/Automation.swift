@@ -437,7 +437,8 @@ extension FluxaEngine {
     /// Un volume en unités décimales : « 2 Go », « 1,5 Go », « 500 Mo ».
     static func volume(_ bytes: UInt64) -> String {
         let units: [(size: Double, name: String)] = [(1e9, "Go"), (1e6, "Mo"), (1e3, "ko")]
-        for unit in units where Double(bytes) >= unit.size {
+        // L'unité retenue est la plus grande dont la valeur, arrondie, atteint 1.
+        for unit in units where (Double(bytes) / unit.size * 100).rounded() >= 100 {
             var text = String(format: "%.2f", Double(bytes) / unit.size)
             while text.hasSuffix("0") {
                 text.removeLast()
