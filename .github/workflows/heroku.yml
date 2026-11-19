@@ -1,6 +1,6 @@
 # Déploie master sur Heroku, sans la CLI Heroku : tout passe par l'API de la
-# plateforme. Heroku construit l'application avec le buildpack emk/rust
-# (RustConfig, Procfile) sur la pile heroku-26.
+# plateforme. Heroku construit le site (site/, une application Paquets) avec le
+# buildpack emk/rust (RustConfig, heroku-build.sh, Procfile) sur la pile heroku-26.
 #
 # Réglages (GitHub → Settings → Secrets and variables → Actions) :
 #   - secret   HEROKU_API_KEY   Heroku → Account settings → API Key → Reveal
@@ -10,13 +10,18 @@
 
 name: Deploy to Heroku
 
-# Démarré par un push sur master, ou à la main : Actions → Deploy to Heroku → Run workflow.
+# Démarré par un push sur master qui touche le site, ou à la main :
+# Actions → Deploy to Heroku → Run workflow.
 on:
   push:
     branches: [master]
-    paths-ignore:
-      - "**.md"
-      - ".github/workflows/pages.yml"
+    paths:
+      - "site/**"
+      - "Procfile"
+      - "RustConfig"
+      - "heroku-build.sh"
+      - "app.json"
+      - ".github/workflows/heroku.yml"
   workflow_dispatch:
 
 concurrency:
@@ -34,7 +39,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Test the server
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: site
+      - name: Test the site
+        working-directory: site
         run: cargo test --locked
       - name: Build and release on Heroku
         run: |

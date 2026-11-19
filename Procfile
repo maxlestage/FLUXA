@@ -1,1 +1,1 @@
-web: SITE_DIR=public ./target/release/fluxa-site
+web: SITE_DIR=site exec site/target/release/fluxa-site

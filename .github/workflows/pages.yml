@@ -1,8 +1,11 @@
-# Publie le dossier public/ sur GitHub Pages à chaque push sur master.
+# Publie le site sur GitHub Pages à chaque push sur master qui le touche.
+#
+# Le site est une application Paquets (site/) : le workflow compile ses îlots en
+# WebAssembly, puis demande au serveur d'écrire toutes ses pages en fichiers
+# statiques, derrière le sous-chemin du dépôt (/FLUXA).
 #
 # Réglage à faire une fois : GitHub → Settings → Pages → Build and deployment →
-# Source : « GitHub Actions ». Sans ce réglage, le workflow échoue à l'étape
-# « Configure Pages ».
+# Source : « GitHub Actions ».
 #
 # Démarrage à la main : Actions → Deploy to GitHub Pages → Run workflow.
 
@@ -12,7 +15,8 @@ on:
   push:
     branches: [master]
     paths:
-      - "public/**"
+      - "site/**"
+      - "heroku-build.sh"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -32,22 +36,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: site
       - name: Configure Pages
         id: pages
         uses: actions/configure-pages@v5
-      - name: Prepare the site
+      - name: Test the site
+        working-directory: site
+        run: cargo test --locked
+      - name: Build the server and the islands
+        run: ./heroku-build.sh
+      - name: Export the static site
+        working-directory: site
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
         run: |
           set -euo pipefail
-          cp -r public _site
-          # Le site est statique : pas de Jekyll.
-          touch _site/.nojekyll
-          # Les pages utilisent des liens relatifs et fonctionnent sous /FLUXA/.
-          # Seule 404.html, servie à n'importe quelle adresse, a des liens absolus :
-          # ils reçoivent le chemin de base du site.
-          sed -i -E "s#(href|src)=\"/#\1=\"${BASE_PATH}/#g" _site/404.html
-          test -f _site/index.html
+          ./target/release/fluxa-site export ../_site
+          test -f ../_site/index.html
+          test -f ../_site/pkg/fluxa_site_bg.wasm
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

@@ -1,11 +1,12 @@
 {
   "name": "FLUXA",
-  "description": "Le site de présentation de FLUXA, le moniteur de connexion pour iPhone, servi par un petit serveur Rust.",
+  "description": "Le site de présentation de FLUXA, le moniteur de connexion pour iPhone, écrit en Rust avec Paquets.",
   "website": "https://fluxa-app-ded0024c2b45.herokuapp.com/",
-  "logo": "https://fluxa-app-ded0024c2b45.herokuapp.com/assets/favicon.svg",
+  "logo": "https://fluxa-app-ded0024c2b45.herokuapp.com/favicon.svg",
   "keywords": [
     "rust",
-    "site",
+    "paquets",
+    "wasm",
     "ios"
   ],
   "stack": "heroku-26",

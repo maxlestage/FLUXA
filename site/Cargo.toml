@@ -1,0 +1,55 @@
+[package]
+name = "fluxa-site"
+version = "0.2.0"
+edition = "2024"
+publish = false
+description = "Le site de présentation de FLUXA, écrit avec Paquets : pages rendues par le serveur, îlots en WebAssembly."
+
+# Crate autonome : elle ne fait pas partie du workspace du moteur (à la racine).
+[workspace]
+
+# La bibliothèque porte ce que le serveur et le navigateur partagent (textes, vues,
+# îlots) et, compilée en WebAssembly, le bundle du navigateur. Le binaire est le
+# serveur, et l'export statique pour GitHub Pages.
+[lib]
+name = "fluxa_site"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "fluxa-site"
+path = "src/main.rs"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+paquets = { git = "https://github.com/maxlestage/Paquets", default-features = false, features = ["compress"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+paquets = { git = "https://github.com/maxlestage/Paquets", default-features = false, features = ["client"] }
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+  "CanvasGradient",
+  "CanvasRenderingContext2d",
+  "Document",
+  "DomRect",
+  "Element",
+  "HtmlCanvasElement",
+  "HtmlElement",
+  "MediaQueryList",
+  "Window",
+] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# Le bundle du navigateur : `cargo build --lib --target wasm32-unknown-unknown --profile wasm-release`.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+# Pas de `strip = true` : wasm-bindgen lit la section `target_features`.
+strip = false
