@@ -1,5 +1,11 @@
 # Heroku avec le buildpack emk/rust
-# (https://elements.heroku.com/buildpacks/emk/heroku-buildpack-rust).
-# Le buildpack lit ce fichier, installe Rust, lance `cargo build --release` à la
-# racine et garde le binaire target/release/fluxa-site, que le Procfile démarre.
+# (https://elements.heroku.com/buildpacks/emk/heroku-buildpack-rust) : le site,
+# construit depuis site/.
+#
+# Le buildpack lit ce fichier, installe Rust, puis lancerait `cargo build --release`
+# à la racine, où se trouve le moteur de l'app iOS, pas le site. Cette construction
+# est donc sautée : heroku-build.sh compile le serveur et les îlots (WebAssembly)
+# une fois Rust installé.
 VERSION=stable
+RUST_SKIP_BUILD=1
+trap 'status=$?; if [ "$status" -eq 0 ]; then ENV_DIR="$ENV_DIR" bash "$BUILD_DIR/heroku-build.sh" || exit 1; fi' EXIT
