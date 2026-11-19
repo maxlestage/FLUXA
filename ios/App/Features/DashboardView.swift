@@ -25,7 +25,16 @@ struct DashboardView: View {
                             note: "Reçu et envoyé"
                         )
                     }
+                    sharing
                     profile
+                    NavigationLink {
+                        SpeedTestView()
+                    } label: {
+                        Label("Tester le débit", systemImage: "speedometer")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                     NavigationLink {
                         NetworkView()
                     } label: {
@@ -137,6 +146,30 @@ struct DashboardView: View {
     private var chartCeiling: Double {
         let peak = model.samples.map { max($0.downloadBps, $0.uploadBps) }.max() ?? 0
         return max(1, peak / 1_000_000 * 1.15)
+    }
+
+    /// L'état du partage de connexion, déduit des interfaces du système.
+    private var sharing: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Eyebrow("Partage de connexion")
+                    Spacer()
+                    if model.sharingDetected {
+                        StatusPill(.supported, "Détecté")
+                    } else {
+                        StatusPill(.guide, "Non détecté")
+                    }
+                }
+                Text(model.sharingDetected
+                    ? "Le débit affiché compte aussi le trafic des appareils reliés à votre iPhone."
+                    : "Activez le partage dans Réglages : FLUXA mesurera la connexion pendant que vous partagez.")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("partage")
     }
 
     private var profile: some View {

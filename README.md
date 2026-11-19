@@ -16,8 +16,9 @@ Le site en ligne :
 | Chemin | Rôle |
 | --- | --- |
 | `ios/FluxaCore/` | la logique, en Swift pur : mesure du débit, latence, profils, limites et simulation, capacités, historique, stockage. Testée sans l'interface, sous Linux et macOS |
-| `ios/App/` | l'app SwiftUI : tableau de bord, mon réseau, partage de connexion, profils, limiteur, historique, réglages, diagnostic |
-| `ios/App/Services/` | l'accès au système : compteurs des interfaces (`getifaddrs`), type de réseau (`NWPathMonitor`), génération mobile (CoreTelephony), sonde de latence (`NWConnection`) |
+| `ios/App/` | l'app SwiftUI : tableau de bord, mon réseau, test de débit, partage de connexion, profils, limiteur, automatisations, historique, réglages, diagnostic |
+| `ios/App/Services/` | l'accès au système : compteurs des interfaces (`getifaddrs`), type de réseau (`NWPathMonitor`), génération mobile (CoreTelephony), sonde de latence (`NWConnection`), test de débit (`URLSession`), notifications |
+| `ios/AppTests/`, `ios/AppUITests/` | les règles de l'interface, et l'app manipulée écran par écran dans le simulateur |
 | `ios/project.yml` | le projet Xcode, décrit pour [XcodeGen](https://github.com/yonaskolb/XcodeGen) |
 
 ```sh
@@ -28,6 +29,11 @@ cd ios && xcodegen generate && open Fluxa.xcodeproj
 
 iOS 17 au minimum. L'identifiant `app.fluxa.ios` de `project.yml` est provisoire : remplacez-le
 par celui de votre compte développeur avant de signer.
+
+Le test de débit échange des données de test avec `speed.cloudflare.com` par défaut ; l'adresse se
+règle dans l'app (un serveur compatible offre `GET /__down?bytes=N` et `POST /__up`). L'état du
+partage de connexion est déduit de l'interface de pont que le système crée (`bridge100`) : c'est un
+signe indirect, à confirmer sur un vrai iPhone.
 
 Ce que l'app ne fait pas, parce qu'iOS le réserve au système : activer le partage de connexion,
 en limiter le débit, lister ou déconnecter les appareils reliés. Un plafond réglé dans l'app est

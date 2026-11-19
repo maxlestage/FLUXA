@@ -188,6 +188,65 @@ final class FluxaUITests: XCTestCase {
         XCTAssertFalse(hasElement(labelled: "Appliqué"))
     }
 
+    // MARK: Test de débit
+
+    func testTheSpeedTestMeasuresBothDirections() {
+        launch(["-fluxaScreen", "test"])
+        XCTAssertTrue(app.navigationBars["Test de débit"].waitForExistence(timeout: 30))
+        let start = button(startingWith: "Lancer le test").firstMatch
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        // Le bouton attend que le réseau soit reconnu.
+        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == YES"), object: start)
+        XCTAssertEqual(XCTWaiter().wait(for: [enabled], timeout: 15), .completed)
+        start.tap()
+        // Latence, téléchargement puis envoi : une vingtaine de secondes.
+        let done = app.descendants(matching: .any)["test-termine"]
+        XCTAssertTrue(done.waitForExistence(timeout: 60), "le test n'a pas abouti")
+        XCTAssertFalse(app.descendants(matching: .any)["erreur-test"].exists)
+        // Le résultat rejoint les tests précédents.
+        XCTAssertFalse(element(containing: "Aucun test pour l").exists)
+    }
+
+    // MARK: Automatisations
+
+    func testARuleCanBeCreatedAndSwitchedOff() {
+        launch(["-fluxaScreen", "automatisations"])
+        XCTAssertTrue(app.navigationBars["Automatisations"].waitForExistence(timeout: 30))
+        app.navigationBars["Automatisations"].buttons["Nouvelle règle"].tap()
+        let name = app.textFields["Nom de la règle"]
+        XCTAssertTrue(name.waitForExistence(timeout: 10))
+        name.tap()
+        name.typeText("Forfait")
+        app.navigationBars.buttons["Enregistrer"].tap()
+        XCTAssertFalse(app.descendants(matching: .any)["erreur-regle"].waitForExistence(timeout: 2))
+        XCTAssertTrue(button(containing: "Forfait").waitForExistence(timeout: 5))
+        XCTAssertTrue(element(containing: "dans la journée : prévenir").exists)
+        // La règle se coupe d'un geste.
+        let toggle = app.switches.matching(NSPredicate(format: "label CONTAINS %@", "Forfait")).firstMatch
+        XCTAssertTrue(toggle.exists)
+        toggle.tap()
+        assertNoError()
+    }
+
+    func testARuleWithoutNameIsRefused() {
+        launch(["-fluxaScreen", "automatisations"])
+        XCTAssertTrue(app.navigationBars["Automatisations"].waitForExistence(timeout: 30))
+        app.navigationBars["Automatisations"].buttons["Nouvelle règle"].tap()
+        XCTAssertTrue(app.textFields["Nom de la règle"].waitForExistence(timeout: 10))
+        app.navigationBars.buttons["Enregistrer"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["erreur-regle"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["Annuler"].tap()
+        assertNoError()
+    }
+
+    func testTheDashboardShowsTheSharingState() {
+        launch()
+        XCTAssertTrue(app.navigationBars["Tableau de bord"].waitForExistence(timeout: 30))
+        // Dans le simulateur, aucun partage : l'app le dit sans rien inventer.
+        XCTAssertTrue(scroll(to: app.descendants(matching: .any)["partage"]))
+        XCTAssertTrue(element(containing: "Non détecté").exists)
+    }
+
     // MARK: Historique, réglages, diagnostic
 
     func testTheHistoryShowsItsSummary() {

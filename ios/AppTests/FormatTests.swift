@@ -80,6 +80,65 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(Set(readings.map(\.name)).count, readings.count, "une entrée par interface")
     }
 
+    func testSharingIsDetectedFromItsBridgeInterface() {
+        XCTAssertTrue(InterfaceCounters.isSharing([("en0", true), ("bridge100", true)]))
+        XCTAssertFalse(InterfaceCounters.isSharing([("en0", true), ("bridge100", false)]), "interface à l'arrêt")
+        // Le pont Thunderbolt d'un Mac (bridge0) n'est pas un partage de connexion.
+        XCTAssertFalse(InterfaceCounters.isSharing([("en0", true), ("bridge0", true)]))
+        XCTAssertFalse(InterfaceCounters.isSharing([]))
+    }
+
+    func testRulesAreSummarisedInOneSentence() {
+        let profiles = [Profile(id: "economy", name: "Économie", downloadBps: 1_000_000, uploadBps: 500_000, isBuiltin: true)]
+        let threshold = AutomationRule(name: "Forfait", trigger: .dailyUsage(bytes: 2_000_000_000), action: .alert)
+        XCTAssertEqual(
+            RuleText.summary(of: threshold, profiles: profiles),
+            "À 2,00\(space)Go dans la journée : prévenir"
+        )
+        let night = AutomationRule(
+            name: "Nuit",
+            trigger: .schedule(startMinute: 22 * 60, endMinute: 7 * 60, weekdays: []),
+            action: .activateProfile(id: "economy")
+        )
+        XCTAssertEqual(RuleText.summary(of: night, profiles: profiles), "De 22:00 à 07:00, tous les jours : profil Économie")
+        let gone = AutomationRule(name: "x", trigger: .dailyUsage(bytes: 1_000_000), action: .activateProfile(id: "absent"))
+        XCTAssertTrue(RuleText.summary(of: gone, profiles: profiles).hasSuffix("profil supprimé"))
+    }
+
+    func testARuleDraftGoesBackAndForth() {
+        var draft = RuleDraft(defaultProfile: "economy")
+        draft.name = "Forfait"
+        draft.amount = 1.5
+        draft.unit = .gigabytes
+        XCTAssertEqual(draft.rule.trigger, .dailyUsage(bytes: 1_500_000_000))
+        XCTAssertEqual(draft.rule.action, .alert)
+
+        draft.kind = .schedule
+        draft.start = RuleDraft.time(minutes: 22 * 60 + 30)
+        draft.end = RuleDraft.time(minutes: 6 * 60)
+        draft.weekdays = [2, 3]
+        draft.changesProfile = true
+        let rule = draft.rule
+        XCTAssertEqual(rule.trigger, .schedule(startMinute: 1_350, endMinute: 360, weekdays: [2, 3]))
+        XCTAssertEqual(rule.action, .activateProfile(id: "economy"))
+        // Relue pour être modifiée, la règle donne la même saisie.
+        XCTAssertEqual(RuleDraft(rule).rule, rule)
+
+        // Une saisie invalide ne plante pas : elle donne un seuil nul, que le moteur refuse.
+        draft.kind = .usage
+        draft.amount = -3
+        XCTAssertEqual(draft.rule.trigger, .dailyUsage(bytes: 0))
+    }
+
+    func testSpeedTestAddresses() {
+        let base = URL(string: "https://speed.cloudflare.com/")!
+        XCTAssertEqual(
+            SpeedTestRunner.endpoint(base, "__down?bytes=50000000")?.absoluteString,
+            "https://speed.cloudflare.com/__down?bytes=50000000"
+        )
+        XCTAssertEqual(SpeedTestRunner.endpoint(base, "__up")?.absoluteString, "https://speed.cloudflare.com/__up")
+    }
+
     func testRadioGenerations() {
         XCTAssertEqual(RadioTechnology.generation(of: CTRadioAccessTechnologyNR), "5G")
         XCTAssertEqual(RadioTechnology.generation(of: CTRadioAccessTechnologyNRNSA), "5G")
