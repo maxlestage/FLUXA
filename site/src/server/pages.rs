@@ -247,7 +247,7 @@ struct Feature {
     meta: &'static str,
 }
 
-const FEATURES: [Feature; 9] = [
+const FEATURES: [Feature; 12] = [
     Feature {
         id: "f-tableau",
         name: "Tableau de bord",
@@ -270,11 +270,32 @@ const FEATURES: [Feature; 9] = [
         meta: "Sur événement système",
     },
     Feature {
+        id: "f-forfait",
+        name: "Forfait mobile",
+        status: OK,
+        text: "Indiquez le volume de votre forfait et son jour de remise à zéro. FLUXA compte ce que l’iPhone consomme sur le réseau mobile, partage compris, et projette la fin du cycle.",
+        meta: "À recaler sur le nombre de votre opérateur",
+    },
+    Feature {
+        id: "f-rattrapage",
+        name: "Hors de l’app",
+        status: OK,
+        text: "iOS suspend l’app en arrière-plan. À votre retour, FLUXA lit les compteurs du système et vous dit ce qui a passé entre-temps, réseau par réseau.",
+        meta: "Un minimum : ces compteurs repartent de zéro tous les 4 Go",
+    },
+    Feature {
         id: "f-partage",
         name: "Partage de connexion",
         status: GUIDE,
         text: "iOS garde la main sur le partage. Un bouton ouvre les Réglages et un guide vous accompagne jusqu’à l’activation.",
         meta: "Activation dans Réglages iOS",
+    },
+    Feature {
+        id: "f-appareils",
+        name: "Mes appareils",
+        status: OK,
+        text: "iOS ne dit pas quels appareils sont reliés au partage. Notez les vôtres, avec le profil que vous destinez à chacun.",
+        meta: "Saisis par vous, jamais détectés",
     },
     Feature {
         id: "f-profils",
@@ -859,6 +880,7 @@ const FOOTER: [(&str, &[(&str, &str)]); 6] = [
             ("#f-tableau", "Tableau de bord"),
             ("#f-test", "Test de débit"),
             ("#f-reseau", "Mon réseau"),
+            ("#f-forfait", "Forfait mobile"),
             ("#f-partage", "Partage de connexion"),
             ("#f-historique", "Historique"),
             ("#f-automatisations", "Automatisations"),
@@ -1124,7 +1146,8 @@ pub fn privacy(ctx: &Ctx) -> Page {
             ),
             Block::List(&[
                 "les mesures réseau : débit descendant et montant, latence, gigue, pertes de paquets lorsqu’elles sont mesurables, type de réseau, disponibilité d’Internet ;",
-                "la consommation de données et les sessions réseau ;",
+                "la consommation de données par réseau, y compris celle relevée sur les compteurs du système à votre retour dans l’app, et les sessions de partage de connexion ;",
+                "le volume de votre forfait mobile et son jour de remise à zéro, si vous les indiquez ;",
                 "vos profils, vos règles et le résultat de leur application (appliqué, partiel, simulé ou non pris en charge) ;",
                 "les appareils que vous enregistrez et le nom que vous leur donnez ;",
                 "vos préférences.",

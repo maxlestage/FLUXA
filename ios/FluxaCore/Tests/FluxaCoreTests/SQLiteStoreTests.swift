@@ -91,8 +91,9 @@ final class SQLiteStoreTests: XCTestCase {
         XCTAssertEqual(
             tables,
             [
-                "app_settings", "automation_events", "bandwidth_profiles", "devices", "policy_applications",
-                "rule_activations", "scheduled_rules", "speed_tests", "usage_records",
+                "absences", "app_settings", "automation_events", "bandwidth_profiles", "devices",
+                "network_usage", "policy_applications", "rule_activations", "scheduled_rules",
+                "sharing_sessions", "speed_tests", "usage_records",
             ])
         XCTAssertEqual(Set(tables), Set(SQLiteStore.tables))
     }
@@ -447,8 +448,9 @@ final class SQLiteStoreTests: XCTestCase {
         bench.measure(seconds: 60, down: 20, up: 4)
         let first = store.lastSaveChanges
         bench.measure(seconds: 60, down: 20, up: 4)
-        // La minute terminée, l'heure et le jour : trois agrégats, quel que soit l'historique.
-        XCTAssertEqual(store.lastSaveChanges, 3)
+        // La minute terminée, l'heure et le jour : trois agrégats, plus le volume du réseau
+        // pour l'heure et pour le jour, quel que soit l'historique.
+        XCTAssertEqual(store.lastSaveChanges, 5)
         XCTAssertGreaterThan(first, 3, "le premier enregistrement écrit aussi les préréglages et les réglages")
     }
 }

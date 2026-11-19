@@ -4,11 +4,12 @@ import Foundation
 //
 // CONTRAT : les signatures publiques de ce fichier sont utilisées par l'app.
 //
-// Schéma (version 1, dans `PRAGMA user_version`). Les dates sont des REAL : les secondes
+// Schéma (version 2, dans `PRAGMA user_version`). Les dates sont des REAL : les secondes
 // depuis la référence de Foundation (1er janvier 2001, UTC), gardées exactes. Dans le
 // shell sqlite3 : `datetime(colonne + 978307200, 'unixepoch')`.
 //
-//   app_settings         clé, valeur : compteurs d'identifiants, profil actif, dernière réponse
+//   app_settings         clé, valeur : compteurs d'identifiants, profil actif, dernière réponse,
+//                        forfait et son recalage, point de reprise, session de partage en cours
 //   bandwidth_profiles   les profils, préréglages compris, avec leur position
 //   usage_records        les agrégats ; `step` vaut minute, hour ou day
 //   policy_applications  le journal des demandes de limite
@@ -17,6 +18,12 @@ import Foundation
 //   automation_events    le journal des règles
 //   speed_tests          les tests de débit
 //   devices              les appareils notés par l'utilisateur
+//
+// Depuis la version 2 :
+//
+//   network_usage        le volume par réseau ; `step` vaut hour ou day
+//   absences             les volumes rattrapés hors de l'app
+//   sharing_sessions     les sessions de partage de connexion terminées
 
 /// Un stockage dans une base SQLite, sur l'appareil.
 ///
@@ -25,7 +32,7 @@ import Foundation
 /// changé, là où le fichier JSON était réécrit en entier.
 public final class SQLiteStore: EngineStore {
     /// La version du schéma que cette version de l'app sait lire et écrire.
-    static let schemaVersion = 1
+    static let schemaVersion = 2
 
     private let url: URL
     private let database: SQLiteDatabase
@@ -107,6 +114,9 @@ public final class SQLiteStore: EngineStore {
             eventSequence = try writeEvents(old, new)
             try writeSpeedTests(old, new)
             try writeDevices(old, new)
+            try writeNetworkUsage(old, new)
+            try writeAbsences(old, new)
+            try writeSharingSessions(old, new)
         }
         // La base a accepté toute la transaction : ce qu'elle contient est connu.
         known = new
@@ -154,6 +164,7 @@ public final class SQLiteStore: EngineStore {
     static let tables = [
         "app_settings", "bandwidth_profiles", "usage_records", "policy_applications",
         "scheduled_rules", "rule_activations", "automation_events", "speed_tests", "devices",
+        "network_usage", "absences", "sharing_sessions",
     ]
 
     /// Amène le schéma à la version courante. Chaque version future ajoute son étape,
@@ -164,7 +175,10 @@ public final class SQLiteStore: EngineStore {
             if version < 1 {
                 try database.execute(schemaV1)
             }
-            // if version < 2 { try database.execute(schemaV2) } …
+            if version < 2 {
+                try database.execute(schemaV2)
+            }
+            // if version < 3 { try database.execute(schemaV3) } …
             try database.execute("PRAGMA user_version = \(schemaVersion)")
         }
     }
@@ -253,6 +267,35 @@ public final class SQLiteStore: EngineStore {
             note       TEXT NOT NULL,
             added_at   REAL NOT NULL
         ) WITHOUT ROWID;
+        """
+
+    /// Version 2 : trois tables de plus. Les tables de la version 1 ne changent pas ; les
+    /// réglages nouveaux sont des clés de plus dans `app_settings`.
+    private static let schemaV2 = """
+        CREATE TABLE network_usage (
+            step           TEXT NOT NULL CHECK (step IN ('hour', 'day')),
+            start          REAL NOT NULL,
+            network        TEXT NOT NULL,
+            received_bytes INTEGER NOT NULL,
+            sent_bytes     INTEGER NOT NULL,
+            PRIMARY KEY (step, start, network)
+        ) WITHOUT ROWID;
+
+        CREATE TABLE absences (
+            id           INTEGER PRIMARY KEY,
+            started_at   REAL NOT NULL,
+            ended_at     REAL NOT NULL,
+            volumes_json TEXT NOT NULL
+        );
+
+        CREATE TABLE sharing_sessions (
+            id                 INTEGER PRIMARY KEY,
+            started_at         REAL NOT NULL,
+            ended_at           REAL NOT NULL,
+            to_devices_bytes   INTEGER NOT NULL,
+            from_devices_bytes INTEGER NOT NULL,
+            is_lower_bound     INTEGER NOT NULL
+        );
         """
 
     /// Sous iOS, demande aussi la protection des fichiers par leurs attributs : le
@@ -364,6 +407,33 @@ public final class SQLiteStore: EngineStore {
                 profileID: row.optionalText(4), note: row.text(5), addedAt: row.date(6))
             return Positioned(position: row.int(1), value: device)
         }.forEach { contents.devices[$0.value.id] = $0 }
+
+        try database.rows(
+            "SELECT step, start, network, received_bytes, sent_bytes FROM network_usage"
+        ) { row -> (NetworkUsageKey, NetworkBucket) in
+            // Une famille inconnue (écrite par une version plus récente) se range dans « autre ».
+            let kind = InterfaceClass(rawValue: row.text(2)) ?? .other
+            let bucket = NetworkBucket(
+                start: row.date(1), kind: kind, receivedBytes: row.unsigned(3), sentBytes: row.unsigned(4))
+            return (NetworkUsageKey(step: row.text(0), start: row.real(1), network: kind.rawValue), bucket)
+        }.forEach { contents.networkUsage[$0.0] = $0.1 }
+
+        try database.rows("SELECT id, started_at, ended_at, volumes_json FROM absences") { row in
+            AbsenceUsage(
+                id: row.int(0), start: row.date(1), end: row.date(2),
+                volumes: try Self.decode([NetworkVolume].self, row.text(3), "absences"))
+        }.forEach { contents.absences[$0.id] = $0 }
+
+        try database.rows(
+            """
+            SELECT id, started_at, ended_at, to_devices_bytes, from_devices_bytes, is_lower_bound
+            FROM sharing_sessions
+            """
+        ) { row in
+            SharingSession(
+                id: row.int(0), start: row.date(1), end: row.date(2), toDevicesBytes: row.unsigned(3),
+                fromDevicesBytes: row.unsigned(4), isLowerBound: row.bool(5))
+        }.forEach { contents.sharingSessions[$0.id] = $0 }
 
         known = contents
         policySequence = policies.map(\.0)
@@ -613,6 +683,66 @@ public final class SQLiteStore: EngineStore {
             })
     }
 
+    private func writeNetworkUsage(_ old: StoredContents, _ new: StoredContents) throws {
+        try sync(
+            old.networkUsage, new.networkUsage,
+            delete: "DELETE FROM network_usage WHERE step = ? AND start = ? AND network = ?",
+            upsert: """
+                INSERT INTO network_usage (step, start, network, received_bytes, sent_bytes)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(step, start, network) DO UPDATE SET
+                    received_bytes = excluded.received_bytes, sent_bytes = excluded.sent_bytes
+                """,
+            key: { [.text($0.step), .real($0.start), .text($0.network)] },
+            row: { key, bucket in
+                [
+                    .text(key.step), .real(key.start), .text(key.network),
+                    .unsigned(bucket.receivedBytes), .unsigned(bucket.sentBytes),
+                ]
+            })
+    }
+
+    private func writeAbsences(_ old: StoredContents, _ new: StoredContents) throws {
+        try sync(
+            old.absences, new.absences,
+            delete: "DELETE FROM absences WHERE id = ?",
+            upsert: """
+                INSERT INTO absences (id, started_at, ended_at, volumes_json) VALUES (?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET started_at = excluded.started_at,
+                    ended_at = excluded.ended_at, volumes_json = excluded.volumes_json
+                """,
+            key: { [.integer($0)] },
+            row: { id, absence in
+                [
+                    .integer(id), .date(absence.start), .date(absence.end),
+                    .text(try Self.encode(absence.volumes)),
+                ]
+            })
+    }
+
+    private func writeSharingSessions(_ old: StoredContents, _ new: StoredContents) throws {
+        try sync(
+            old.sharingSessions, new.sharingSessions,
+            delete: "DELETE FROM sharing_sessions WHERE id = ?",
+            upsert: """
+                INSERT INTO sharing_sessions (id, started_at, ended_at, to_devices_bytes,
+                    from_devices_bytes, is_lower_bound)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET started_at = excluded.started_at,
+                    ended_at = excluded.ended_at, to_devices_bytes = excluded.to_devices_bytes,
+                    from_devices_bytes = excluded.from_devices_bytes,
+                    is_lower_bound = excluded.is_lower_bound
+                """,
+            key: { [.integer($0)] },
+            row: { id, session in
+                [
+                    .integer(id), .date(session.start), .date(session.end),
+                    .unsigned(session.toDevicesBytes), .unsigned(session.fromDevicesBytes),
+                    .bool(session.isLowerBound),
+                ]
+            })
+    }
+
     // MARK: - JSON des colonnes riches
 
     fileprivate static func encode<Value: Encodable>(_ value: Value) throws -> String {
@@ -652,6 +782,13 @@ struct UsageKey: Hashable {
     var start: Double
 }
 
+/// La clé d'un volume par réseau : son pas, son début et la famille d'interfaces.
+struct NetworkUsageKey: Hashable {
+    var step: String
+    var start: Double
+    var network: String
+}
+
 /// Le contenu de la base, famille par famille, tel qu'il se compare ligne à ligne.
 struct StoredContents: Equatable {
     var settings: [String: String] = [:]
@@ -663,6 +800,11 @@ struct StoredContents: Equatable {
     var automationLog: [AutomationEvent] = []
     var speedTests: [Double: SpeedTestResult] = [:]
     var devices: [String: Positioned<Device>] = [:]
+    var networkUsage: [NetworkUsageKey: NetworkBucket] = [:]
+    /// Les absences et les sessions de partage, par identifiant : leur ordre est celui
+    /// de leurs identifiants.
+    var absences: [Int: AbsenceUsage] = [:]
+    var sharingSessions: [Int: SharingSession] = [:]
 
     init() {}
 
@@ -676,6 +818,12 @@ struct StoredContents: Equatable {
         static let nextDeviceNumber = "next_device_number"
         static let activeProfileID = "active_profile_id"
         static let lastApplyResult = "last_apply_result"
+        static let nextAbsenceID = "next_absence_id"
+        static let nextSharingSessionID = "next_sharing_session_id"
+        static let dataPlan = "data_plan"
+        static let planCalibration = "plan_calibration"
+        static let checkpoint = "counter_checkpoint"
+        static let currentSharing = "current_sharing_session"
     }
 
     /// Range un état dans les familles de la base.
@@ -687,6 +835,12 @@ struct StoredContents: Equatable {
         settings[Setting.nextDeviceNumber] = String(state.nextDeviceNumber)
         settings[Setting.activeProfileID] = state.activeProfileID
         settings[Setting.lastApplyResult] = try state.lastApplyResult.map(SQLiteStore.encode)
+        settings[Setting.nextAbsenceID] = String(state.nextAbsenceID)
+        settings[Setting.nextSharingSessionID] = String(state.nextSharingSessionID)
+        settings[Setting.dataPlan] = try state.dataPlan.map(SQLiteStore.encode)
+        settings[Setting.planCalibration] = try state.planCalibration.map(SQLiteStore.encode)
+        settings[Setting.checkpoint] = try state.checkpoint.map(SQLiteStore.encode)
+        settings[Setting.currentSharing] = try state.currentSharing.map(SQLiteStore.encode)
 
         profiles = Self.positioned(state.profiles, id: \.id)
         rules = Self.positioned(state.rules, id: \.id)
@@ -703,6 +857,22 @@ struct StoredContents: Equatable {
                 let key = UsageKey(step: step.rawValue, start: bucket.start.timeIntervalSinceReferenceDate)
                 usage[key] = bucket
             }
+        }
+        let networks: [(HistoryStep, NetworkSeries)] = [(.hour, state.networkHours), (.day, state.networkDays)]
+        for (step, series) in networks {
+            for bucket in series.buckets {
+                let key = NetworkUsageKey(
+                    step: step.rawValue, start: bucket.start.timeIntervalSinceReferenceDate,
+                    network: bucket.kind.rawValue)
+                networkUsage[key] = bucket
+            }
+        }
+        // Un identifiant en double garde sa première occurrence.
+        for absence in state.absences where absences[absence.id] == nil {
+            absences[absence.id] = absence
+        }
+        for session in state.sharingSessions where sharingSessions[session.id] == nil {
+            sharingSessions[session.id] = session
         }
         // La date identifie un test : en cas de doublon, le premier de la liste reste.
         for test in state.speedTests {
@@ -733,10 +903,11 @@ struct StoredContents: Equatable {
     func state() throws -> EngineState {
         var state = EngineState()
         let number = { (key: String, fallback: Int) in settings[key].flatMap(Int.init) ?? fallback }
-        state.version = number(Setting.version, EngineState.currentVersion)
-        guard state.version <= EngineState.currentVersion else {
+        guard number(Setting.version, EngineState.currentVersion) <= EngineState.currentVersion else {
             throw FluxaError.store("données d’un format plus récent que cette version de l’app.")
         }
+        // L'état lu sera réécrit avec les champs de cette version.
+        state.version = EngineState.currentVersion
         state.nextProfileNumber = number(Setting.nextProfileNumber, 1)
         state.nextRuleNumber = number(Setting.nextRuleNumber, 1)
         state.nextAutomationEventID = number(Setting.nextAutomationEventID, 1)
@@ -760,6 +931,28 @@ struct StoredContents: Equatable {
         state.minutes = buckets(.minute)
         state.hours = buckets(.hour)
         state.days = buckets(.day)
+
+        state.nextAbsenceID = number(Setting.nextAbsenceID, 1)
+        state.nextSharingSessionID = number(Setting.nextSharingSessionID, 1)
+        state.dataPlan = try settings[Setting.dataPlan].map {
+            try SQLiteStore.decode(DataPlan.self, $0, "app_settings")
+        }
+        state.planCalibration = try settings[Setting.planCalibration].map {
+            try SQLiteStore.decode(PlanCalibration.self, $0, "app_settings")
+        }
+        state.checkpoint = try settings[Setting.checkpoint].map {
+            try SQLiteStore.decode(CounterCheckpoint.self, $0, "app_settings")
+        }
+        state.currentSharing = try settings[Setting.currentSharing].map {
+            try SQLiteStore.decode(SharingSession.self, $0, "app_settings")
+        }
+        let networks = { (step: HistoryStep) in
+            NetworkSeries(buckets: networkUsage.filter { $0.key.step == step.rawValue }.map(\.value))
+        }
+        state.networkHours = networks(.hour)
+        state.networkDays = networks(.day)
+        state.absences = absences.values.sorted { $0.id < $1.id }
+        state.sharingSessions = sharingSessions.values.sorted { $0.id < $1.id }
         return state
     }
 }

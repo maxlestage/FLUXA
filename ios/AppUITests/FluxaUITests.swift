@@ -60,6 +60,14 @@ final class FluxaUITests: XCTestCase {
         return XCTWaiter().wait(for: [waiting], timeout: timeout) == .completed
     }
 
+    /// Referme le clavier par le bouton de sa barre, s'il est affiché.
+    private func closeKeyboard() {
+        let done = app.buttons["Terminé"]
+        if done.waitForExistence(timeout: 3) {
+            done.tap()
+        }
+    }
+
     private func assertNoError(file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertFalse(
             app.alerts["Action impossible"].waitForExistence(timeout: 2),
@@ -297,6 +305,71 @@ final class FluxaUITests: XCTestCase {
         XCTAssertTrue(element(containing: "Non détecté").exists)
     }
 
+    // MARK: Forfait et retour dans l'app
+
+    func testAPlanCanBeFollowed() {
+        launch(["-fluxaScreen", "forfait"])
+        XCTAssertTrue(app.navigationBars["Forfait mobile"].waitForExistence(timeout: 30))
+        let volume = app.textFields["volume-forfait"]
+        XCTAssertTrue(scroll(to: volume))
+        volume.tap()
+        // Un forfait déjà réglé par un test précédent est remplacé.
+        volume.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + "50")
+        closeKeyboard()
+        let save = app.buttons["enregistrer-forfait"]
+        XCTAssertTrue(scroll(to: save))
+        save.tap()
+        XCTAssertFalse(app.descendants(matching: .any)["erreur-forfait"].exists)
+        app.swipeDown()
+        app.swipeDown()
+        let gauge = app.descendants(matching: .any)["jauge-forfait"]
+        XCTAssertTrue(gauge.waitForExistence(timeout: 5))
+        XCTAssertTrue(gauge.label.contains("sur 50"), gauge.label)
+        XCTAssertTrue(element(containing: "Budget par jour").exists)
+        assertNoError()
+    }
+
+    func testAPlanWithoutVolumeIsRefused() {
+        launch(["-fluxaScreen", "forfait"])
+        XCTAssertTrue(app.navigationBars["Forfait mobile"].waitForExistence(timeout: 30))
+        let volume = app.textFields["volume-forfait"]
+        XCTAssertTrue(scroll(to: volume))
+        volume.tap()
+        // Une saisie qui n'est pas un nombre.
+        volume.typeText("x")
+        closeKeyboard()
+        let save = app.buttons["enregistrer-forfait"]
+        XCTAssertTrue(scroll(to: save))
+        save.tap()
+        XCTAssertTrue(scroll(to: app.descendants(matching: .any)["erreur-forfait"]))
+    }
+
+    func testComingBackShowsWhatHappenedMeanwhile() {
+        launch(["-fluxaAbsenceMinimum", "1"])
+        XCTAssertTrue(app.navigationBars["Tableau de bord"].waitForExistence(timeout: 30))
+        // Quelques relevés d'abord : le dernier sert de point de reprise.
+        let throughput = app.descendants(matching: .any)["debit"]
+        XCTAssertTrue(throughput.waitForExistence(timeout: 10))
+        expectation(for: NSPredicate(format: "NOT (label CONTAINS %@)", "—"), evaluatedWith: throughput)
+        waitForExpectations(timeout: 30)
+
+        XCUIDevice.shared.press(.home)
+        // Du trafic pendant l'absence : les compteurs du système avancent sans l'app.
+        let fetched = expectation(description: "page téléchargée")
+        URLSession.shared.dataTask(with: URL(string: "https://www.apple.com/")!) { _, _, _ in
+            fetched.fulfill()
+        }.resume()
+        _ = XCTWaiter().wait(for: [fetched], timeout: 20)
+        sleep(3)
+        app.activate()
+
+        let card = app.descendants(matching: .any)["hors-app"]
+        XCTAssertTrue(card.waitForExistence(timeout: 20))
+        XCTAssertTrue(scroll(to: card))
+        XCTAssertTrue(card.label.contains("Au moins"), card.label)
+        assertNoError()
+    }
+
     // MARK: Historique, réglages, diagnostic
 
     func testTheHistoryShowsItsSummary() {
@@ -308,10 +381,12 @@ final class FluxaUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars.buttons["Exporter"].exists)
         app.swipeDown()
         app.swipeDown()
-        for period in ["24 heures", "30 jours", "1 heure"] {
+        for period in ["30 jours", "1 heure", "24 heures"] {
             app.buttons[period].tap()
             assertNoError()
         }
+        // Sur un jour, le volume se lit aussi par réseau.
+        XCTAssertTrue(scroll(to: app.descendants(matching: .any)["par-reseau"]))
     }
 
     func testTheHistoryCanBeErased() {
@@ -320,7 +395,7 @@ final class FluxaUITests: XCTestCase {
         let erase = button(startingWith: "Effacer l")
         XCTAssertTrue(scroll(to: erase.firstMatch))
         erase.firstMatch.tap()
-        XCTAssertTrue(element(containing: "Vos profils sont conservés").waitForExistence(timeout: 5))
+        XCTAssertTrue(element(containing: "Vos profils et votre forfait sont conservés").waitForExistence(timeout: 5))
         // La confirmation propose le même libellé. Le bouton de la page est masqué par elle :
         // celui qu'on peut toucher est le sien.
         let confirm = button(startingWith: "Effacer l").allElementsBoundByIndex.last { $0.isHittable }

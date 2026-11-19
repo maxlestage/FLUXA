@@ -43,8 +43,39 @@ struct HotspotGuideView: View {
                             StatusPill(.guide, "Non détecté")
                         }
                     }
+                    if let sharing = model.sharing {
+                        ValueRow("Durée", Format.span(sharing.session.duration))
+                        ValueRow("Vers les appareils", Format.rate(sharing.toDevicesBps))
+                        ValueRow("Depuis les appareils", Format.rate(sharing.fromDevicesBps))
+                        ValueRow("Envoyé aux appareils", Format.bytes(sharing.session.toDevicesBytes))
+                        ValueRow("Reçu des appareils", Format.bytes(sharing.session.fromDevicesBytes))
+                    }
                 } footer: {
-                    Text("iOS ne dit pas à une app si le partage est actif. FLUXA le déduit de l’interface réseau que le système crée pour les appareils reliés : ce signe peut manquer, par exemple tant qu’aucun appareil n’est connecté.")
+                    Text("iOS ne dit pas à une app si le partage est actif. FLUXA le déduit de l’interface réseau que le système crée pour les appareils reliés, et y lit le trafic de tous les appareils ensemble. Ce signe peut manquer, par exemple tant qu’aucun appareil n’est connecté.")
+                }
+
+                if !model.sharingSessions.isEmpty {
+                    Section {
+                        ForEach(model.sharingSessions) { session in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text(Format.dateTime(session.start))
+                                    Spacer()
+                                    Text(Format.span(session.duration))
+                                        .font(.callout.monospacedDigit())
+                                        .foregroundStyle(Theme.tertiary)
+                                }
+                                Text("\(SharingText.volume(session)) · ↓ \(Format.bytes(session.toDevicesBytes)) · ↑ \(Format.bytes(session.fromDevicesBytes))")
+                                    .font(.subheadline.monospacedDigit())
+                                    .foregroundStyle(Theme.secondary)
+                            }
+                            .accessibilityElement(children: .combine)
+                        }
+                    } header: {
+                        Text("Sessions de partage")
+                    } footer: {
+                        Text("Mesurées quand FLUXA est ouvert, puis complétées à votre retour d’après les compteurs du système : « au moins » signale un volume rattrapé.")
+                    }
                 }
 
                 Section("Activer le partage") {
