@@ -36,12 +36,27 @@ final class FluxaUITests: XCTestCase {
 
     /// Fait défiler la page jusqu'à ce que l'élément soit à l'écran.
     @discardableResult
-    private func scroll(to element: XCUIElement, swipes: Int = 8) -> Bool {
+    private func scroll(to element: XCUIElement, swipes: Int = 10) -> Bool {
         for _ in 0..<swipes {
-            if element.exists && element.isHittable { return true }
-            app.swipeUp()
+            if isOnScreen(element) { return true }
+            app.swipeUp(velocity: .slow)
         }
-        return element.exists && element.isHittable
+        return isOnScreen(element)
+    }
+
+    /// Visible et touchable : ni sous la barre de navigation, ni sous la barre d'onglets,
+    /// qui flotte par-dessus le bas de la page.
+    private func isOnScreen(_ element: XCUIElement) -> Bool {
+        guard element.exists, element.isHittable else { return false }
+        let screen = app.windows.firstMatch.frame
+        let middle = element.frame.midY
+        return middle > screen.minY + 110 && middle < screen.maxY - 130
+    }
+
+    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let gone = NSPredicate(format: "exists == NO")
+        let waiting = XCTNSPredicateExpectation(predicate: gone, object: element)
+        return XCTWaiter().wait(for: [waiting], timeout: timeout) == .completed
     }
 
     private func assertNoError(file: StaticString = #filePath, line: UInt = #line) {
@@ -150,6 +165,14 @@ final class FluxaUITests: XCTestCase {
         XCTAssertTrue(app.textFields["Nom du profil"].exists)
         app.navigationBars.buttons["Annuler"].tap()
         assertNoError()
+    }
+
+    func testTheLimiterSimulatesOnTheMeasuredRate() {
+        launch(["-fluxaScreen", "limiteur"])
+        XCTAssertTrue(app.navigationBars["Limiteur de débit"].waitForExistence(timeout: 30))
+        XCTAssertTrue(scroll(to: element(containing: "Effet simulé")))
+        // Dès que le débit est mesuré, la simulation le reprend : le message d'attente part.
+        XCTAssertTrue(waitForDisappearance(of: element(containing: "Pas encore de débit mesuré"), timeout: 30))
     }
 
     func testTheLimiterNeverClaimsToApply() {

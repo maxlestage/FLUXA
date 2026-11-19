@@ -15,9 +15,6 @@ struct NetworkView: View {
                 ValueRow("Internet", model.path.isOnline ? "Joignable" : "Injoignable")
                 ValueRow("Facturé à l’usage", yesNo(model.path.isExpensive))
                 ValueRow("Données réduites", yesNo(model.path.isConstrained))
-                ValueRow("IPv4", yesNo(model.path.supportsIPv4))
-                ValueRow("IPv6", yesNo(model.path.supportsIPv6))
-                ValueRow("Résolution de noms", yesNo(model.path.supportsDNS))
             }
 
             Section {
