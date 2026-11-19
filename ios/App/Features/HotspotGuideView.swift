@@ -88,6 +88,14 @@ struct HotspotGuideView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        DevicesView()
+                    } label: {
+                        Label("Mes appareils", systemImage: "laptopcomputer.and.iphone")
+                    }
+                }
+
+                Section {
                     if let guide = URL(string: "https://support.apple.com/fr-fr/111785") {
                         Link(destination: guide) {
                             Label("Guide Apple du partage de connexion", systemImage: "arrow.up.right.square")

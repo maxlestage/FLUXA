@@ -114,3 +114,28 @@ extension EngineEvent.Level {
         }
     }
 }
+
+extension DeviceKind {
+    var title: String {
+        switch self {
+        case .computer: "Ordinateur"
+        case .phone: "Téléphone"
+        case .tablet: "Tablette"
+        case .television: "Téléviseur"
+        case .console: "Console"
+        case .other: "Autre"
+        }
+    }
+
+    /// Le symbole SF qui le représente.
+    var symbol: String {
+        switch self {
+        case .computer: "laptopcomputer"
+        case .phone: "iphone"
+        case .tablet: "ipad"
+        case .television: "tv"
+        case .console: "gamecontroller"
+        case .other: "dot.radiowaves.left.and.right"
+        }
+    }
+}

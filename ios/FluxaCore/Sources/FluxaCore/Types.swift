@@ -395,5 +395,7 @@ public enum FluxaError: Error, Equatable, Sendable {
     case builtinProfile(id: String)
     /// Une règle d'automatisation refusée, avec la raison en français.
     case invalidRule(String)
+    /// Un appareil du registre refusé, avec la raison en français.
+    case invalidDevice(String)
     case store(String)
 }
