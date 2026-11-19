@@ -14,6 +14,19 @@ extension NetworkKind {
     }
 }
 
+extension NetworkKind {
+    /// La famille d'interfaces qui porte ce réseau.
+    var interfaceClass: InterfaceClass? {
+        switch self {
+        case .wifi: .wifi
+        case .cellular: .cellular
+        case .wired: .wired
+        case .other: .other
+        case .offline: nil
+        }
+    }
+}
+
 extension InterfaceClass {
     var title: String {
         switch self {

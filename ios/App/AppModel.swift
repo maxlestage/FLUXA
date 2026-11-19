@@ -86,6 +86,20 @@ final class AppModel {
 
     private func sample() {
         interfaces = InterfaceCounters.read()
+        #if targetEnvironment(simulator)
+        // Dans le simulateur, les interfaces sont celles du Mac : `en0` y est souvent de
+        // l'Ethernet. Elles prennent la famille du réseau courant, pour que la mesure vive.
+        if let family = path.kind.interfaceClass {
+            interfaces = interfaces.map {
+                InterfaceReading(
+                    name: $0.name,
+                    kind: family,
+                    receivedBytes: $0.receivedBytes,
+                    sentBytes: $0.sentBytes
+                )
+            }
+        }
+        #endif
         snapshot = engine.ingest(interfaces)
         samples = engine.recentSamples
         ticks += 1

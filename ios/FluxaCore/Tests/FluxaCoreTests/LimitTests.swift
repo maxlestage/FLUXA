@@ -347,3 +347,19 @@ final class LimitTests: XCTestCase {
         XCTAssertTrue(FluxaError.store("disque plein.").localizedDescription.hasSuffix("disque plein."))
     }
 }
+
+final class LimitsConversionTests: XCTestCase {
+    func testConvertsBetweenMbpsAndBps() {
+        XCTAssertEqual(Limits.bps(fromMbps: 25), 25_000_000)
+        XCTAssertEqual(Limits.bps(fromMbps: 0.1), 100_000)
+        XCTAssertEqual(Limits.mbps(fromBps: 500_000), 0.5)
+    }
+
+    func testAnInvalidEntryNeverCrashes() {
+        XCTAssertEqual(Limits.bps(fromMbps: -3), 0)
+        XCTAssertEqual(Limits.bps(fromMbps: .nan), 0)
+        XCTAssertEqual(Limits.bps(fromMbps: -.infinity), 0)
+        XCTAssertEqual(Limits.bps(fromMbps: .infinity), 0)
+        XCTAssertEqual(Limits.bps(fromMbps: 1e30), 1_000_000_000_000_000_000)
+    }
+}
