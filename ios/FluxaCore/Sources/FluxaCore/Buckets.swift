@@ -98,6 +98,13 @@ extension Bucket: Codable {
 struct BucketSeries: Equatable, Sendable {
     private(set) var buckets: [Bucket] = []
 
+    init() {}
+
+    /// Une suite à partir de périodes lues dans un stockage, dans n'importe quel ordre.
+    init(buckets: [Bucket]) {
+        self.buckets = buckets.sorted { $0.start < $1.start }
+    }
+
     var count: Int { buckets.count }
 
     /// Ajoute une mesure à la période qui commence à `start`.

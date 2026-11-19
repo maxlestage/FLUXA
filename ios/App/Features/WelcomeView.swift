@@ -58,6 +58,7 @@ struct WelcomeView: View {
             Button(action: onDone) {
                 Text("Commencer")
                     .font(.headline)
+                    .foregroundStyle(Theme.background)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
