@@ -130,6 +130,9 @@ struct HistoryView: View {
                                 }
                             }
                         }
+                        // Un conteneur à part entière : sans lui, l'identifiant se
+                        // répandrait sur chaque ligne du bloc.
+                        .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("par-reseau")
                     }
 
@@ -157,6 +160,7 @@ struct HistoryView: View {
                                     .foregroundStyle(Theme.tertiary)
                             }
                         }
+                        .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("absences")
                     }
 

@@ -225,6 +225,9 @@ enum PlanText {
         guard let projected = status.projectedBytes else {
             return "La projection s’affiche après un jour de cycle."
         }
+        if status.usedBytes == 0 {
+            return "Aucun volume compté sur le réseau mobile dans ce cycle."
+        }
         let total = "À ce rythme : \(Format.bytes(projected)) en fin de cycle"
         if let exhaustion = status.exhaustionDate {
             return "\(total), forfait épuisé vers le \(Format.day(exhaustion))."
