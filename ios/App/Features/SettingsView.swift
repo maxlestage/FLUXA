@@ -22,7 +22,21 @@ struct SettingsView: View {
                 } header: {
                     Text("Latence")
                 } footer: {
-                    Text("Toutes les cinq secondes, FLUXA ouvre une connexion vers cet hôte et en mesure le délai. C’est le seul échange réseau que l’app déclenche.")
+                    Text("Toutes les cinq secondes, FLUXA ouvre une connexion vers cet hôte et en mesure le délai. Avec le test de débit, que vous lancez vous-même, c’est le seul échange réseau de l’app.")
+                }
+
+                Section {
+                    LabeledContent("Serveur") {
+                        TextField(SpeedTestRunner.defaultServer, text: $model.speedTestServer)
+                            .multilineTextAlignment(.trailing)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                    }
+                } header: {
+                    Text("Test de débit")
+                } footer: {
+                    Text("Le test ne part que lorsque vous le lancez. Il échange des données de test avec ce serveur, qui voit alors votre adresse IP.")
                 }
 
                 Section {

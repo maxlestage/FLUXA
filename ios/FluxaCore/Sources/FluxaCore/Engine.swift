@@ -21,10 +21,11 @@ public final class FluxaEngine {
     static let eventCapacity = 200
 
     private let store: any EngineStore
-    private let calendar: Calendar
-    private let now: () -> Date
+    // Internes plutôt que privés : les automatisations (Automation.swift) s'en servent.
+    let calendar: Calendar
+    let now: () -> Date
 
-    private var state: EngineState
+    var state: EngineState
     private var meter: InterfaceMeter
     private var latency = LatencyWindow(capacity: FluxaEngine.latencyProbes)
     private var pathKind: NetworkKind = .offline
@@ -357,12 +358,15 @@ public final class FluxaEngine {
         try save()
     }
 
-    /// Efface les mesures et le journal des limites. Les profils restent.
+    /// Efface les mesures, le journal des limites, celui des règles et les tests de
+    /// débit. Les profils et les règles restent.
     public func eraseHistory() throws {
         state.minutes.removeAll()
         state.hours.removeAll()
         state.days.removeAll()
         state.policyLog.removeAll()
+        state.automationLog.removeAll()
+        state.speedTests.removeAll()
         samples.removeAll()
         today = nil
         events.removeAll()
@@ -405,7 +409,7 @@ public final class FluxaEngine {
     /// Répond à une demande de limite et la consigne. Sur iPhone, aucun adaptateur ne
     /// peut confirmer une application : `effective` reste `nil`.
     @discardableResult
-    private func request(_ policy: BandwidthPolicy, forDevice: Bool) -> ApplyResult {
+    func request(_ policy: BandwidthPolicy, forDevice: Bool) -> ApplyResult {
         let result = ApplyResult(
             requested: policy,
             effective: nil,
@@ -463,7 +467,7 @@ public final class FluxaEngine {
     }
 
     /// Les octets mesurés depuis minuit, d'après les minutes de la journée.
-    private func todayTotals(at date: Date) -> (received: UInt64, sent: UInt64) {
+    func todayTotals(at date: Date) -> (received: UInt64, sent: UInt64) {
         let day = calendar.startOfDay(for: date)
         if let totals = today, totals.start == day {
             return (totals.received, totals.sent)
@@ -530,11 +534,11 @@ public final class FluxaEngine {
 
     /// Enregistre sans interrompre : un échec est noté, et le prochain enregistrement
     /// (fin de minute, passage à l'arrière-plan) reprend tout l'état.
-    private func saveQuietly() {
+    func saveQuietly() {
         try? save()
     }
 
-    private func log(_ level: EngineEvent.Level, _ message: String, at date: Date? = nil) {
+    func log(_ level: EngineEvent.Level, _ message: String, at date: Date? = nil) {
         events.append(EngineEvent(id: nextEventID, date: date ?? now(), level: level, message: message))
         nextEventID += 1
         if events.count > Self.eventCapacity {
@@ -577,12 +581,23 @@ public struct EngineState: Codable, Equatable, Sendable {
     var minutes = BucketSeries()
     var hours = BucketSeries()
     var days = BucketSeries()
+    /// Les règles d'automatisation, dans l'ordre de leur création.
+    var rules: [AutomationRule] = []
+    var nextRuleNumber = 1
+    /// Les règles en cours d'effet, de la plus anciennement déclenchée à la plus récente.
+    var activations: [RuleActivation] = []
+    /// Les événements des règles, du plus ancien au plus récent.
+    var automationLog: [AutomationEvent] = []
+    var nextAutomationEventID = 1
+    /// Les tests de débit, du plus récent au plus ancien.
+    var speedTests: [SpeedTestResult] = []
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
         case version, profiles, nextProfileNumber, activeProfileID, lastApplyResult, policyLog
         case minutes, hours, days
+        case rules, nextRuleNumber, activations, automationLog, nextAutomationEventID, speedTests
     }
 
     // Un champ absent prend sa valeur par défaut : un fichier écrit par une version
@@ -603,6 +618,13 @@ public struct EngineState: Codable, Equatable, Sendable {
         minutes = try values.decodeIfPresent(BucketSeries.self, forKey: .minutes) ?? BucketSeries()
         hours = try values.decodeIfPresent(BucketSeries.self, forKey: .hours) ?? BucketSeries()
         days = try values.decodeIfPresent(BucketSeries.self, forKey: .days) ?? BucketSeries()
+        rules = try values.decodeIfPresent([AutomationRule].self, forKey: .rules) ?? []
+        nextRuleNumber = try values.decodeIfPresent(Int.self, forKey: .nextRuleNumber) ?? 1
+        activations = try values.decodeIfPresent([RuleActivation].self, forKey: .activations) ?? []
+        automationLog = try values.decodeIfPresent([AutomationEvent].self, forKey: .automationLog) ?? []
+        nextAutomationEventID =
+            try values.decodeIfPresent(Int.self, forKey: .nextAutomationEventID) ?? 1
+        speedTests = try values.decodeIfPresent([SpeedTestResult].self, forKey: .speedTests) ?? []
     }
 
     /// Remet les sept préréglages en tête, dans leur ordre. Un préréglage déjà présent
@@ -624,6 +646,16 @@ public struct EngineState: Codable, Equatable, Sendable {
         if activeProfileID.map({ id in !profiles.contains { $0.id == id } }) ?? false {
             activeProfileID = nil
         }
+    }
+
+    /// Un identifiant neuf pour une règle : `rule-1`, `rule-2`… jamais réutilisé.
+    mutating func makeRuleID() -> String {
+        var id: String
+        repeat {
+            id = "rule-\(nextRuleNumber)"
+            nextRuleNumber += 1
+        } while rules.contains { $0.id == id }
+        return id
     }
 
     /// Un identifiant neuf pour un profil créé par l'utilisateur.

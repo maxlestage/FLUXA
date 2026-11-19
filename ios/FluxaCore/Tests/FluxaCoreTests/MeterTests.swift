@@ -154,3 +154,44 @@ final class LatencyWindowTests: XCTestCase {
         XCTAssertEqual(window.latest, 15)
     }
 }
+
+final class SpeedMeterTests: XCTestCase {
+    func testTheWarmUpIsLeftOut() {
+        var meter = SpeedMeter(warmUp: 1)
+        // Une seconde d'amorçage lente, puis 1 Mo par seconde pendant quatre secondes.
+        meter.add(bytes: 100_000, at: 0.5)
+        meter.add(bytes: 100_000, at: 1.0)
+        for second in 2...5 {
+            meter.add(bytes: 1_000_000, at: Double(second))
+        }
+        XCTAssertEqual(meter.totalBytes, 4_200_000)
+        XCTAssertEqual(meter.bps ?? 0, 8_000_000, accuracy: 1)
+    }
+
+    func testNoFigureBeforeThereIsEnoughToMeasure() {
+        var meter = SpeedMeter(warmUp: 1)
+        XCTAssertNil(meter.bps)
+        meter.add(bytes: 500_000, at: 0.8)
+        XCTAssertNil(meter.bps, "encore dans l'amorçage")
+        meter.add(bytes: 500_000, at: 1.1)
+        XCTAssertNil(meter.bps, "un dixième de seconde ne suffit pas")
+        meter.add(bytes: 500_000, at: 1.5)
+        XCTAssertNotNil(meter.bps)
+    }
+
+    func testTimePassingWithoutBytesLowersTheRate() {
+        var meter = SpeedMeter(warmUp: 0)
+        meter.add(bytes: 1_000_000, at: 1)
+        XCTAssertEqual(meter.bps(at: 1) ?? 0, 8_000_000, accuracy: 1)
+        XCTAssertEqual(meter.bps(at: 2) ?? 0, 4_000_000, accuracy: 1)
+    }
+
+    func testInvalidInputsAreIgnored() {
+        var meter = SpeedMeter(warmUp: 0)
+        meter.add(bytes: -5, at: 1)
+        meter.add(bytes: 10, at: -1)
+        meter.add(bytes: 10, at: .nan)
+        XCTAssertEqual(meter.totalBytes, 0)
+        XCTAssertNil(meter.bps)
+    }
+}

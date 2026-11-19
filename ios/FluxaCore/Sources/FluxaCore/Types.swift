@@ -393,5 +393,7 @@ public enum FluxaError: Error, Equatable, Sendable {
     case unknownProfile(id: String)
     /// Un préréglage se modifie, mais ne se supprime pas.
     case builtinProfile(id: String)
+    /// Une règle d'automatisation refusée, avec la raison en français.
+    case invalidRule(String)
     case store(String)
 }
