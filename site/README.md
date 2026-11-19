@@ -13,8 +13,8 @@ en WebAssembly à partir des mêmes fonctions.
 | `src/islands.rs` | les îlots : `menu`, `dashboard` (le tableau de bord animé), `profile-lab` |
 | `src/profiles.rs` | les sept profils et la simulation d'un plafond |
 | `src/demo.rs` | les mesures fictives du tableau de bord |
-| `src/client/` | le bundle du navigateur : hydratation, courbe dans un canvas |
-| `public/` | la feuille de style, les polices et l'icône, servies à la racine |
+| `src/client/` | le bundle du navigateur : hydratation, courbe dans un canvas, mise en cache pour le hors-ligne |
+| `public/` | la feuille de style, les polices, les icônes et la carte de partage, servies à la racine |
 | `tests/` | les pages, les liens et l'export |
 
 ## Lancer
@@ -43,6 +43,35 @@ BASE_PATH=/FLUXA SITE_URL=https://maxlestage.github.io/FLUXA cargo run -- export
 
 Chaque page est demandée au serveur lui-même, par le client de test de Paquets : la version
 statique et la version servie sont identiques. `BASE_PATH` préfixe tous les liens.
+
+## Carte de partage
+
+Chaque page annonce `public/og-image.png` (1200 × 630) : c'est l'image affichée quand on partage
+un lien du site. Elle est dessinée par le site lui-même, à l'adresse `/carte-de-partage/`, qui
+n'est ni dans le plan du site ni exportée. Pour la refaire après un changement de texte ou de
+couleurs, lancez le serveur et capturez cette page dans une fenêtre de 1200 × 630, par exemple
+avec Chrome :
+
+```sh
+chrome --headless --window-size=1200,630 --hide-scrollbars \
+  --screenshot=public/og-image.png http://localhost:3000/carte-de-partage/
+```
+
+## Application installable (PWA)
+
+Le site s'installe sur téléphone et ordinateur et se lit hors ligne.
+
+- Le manifeste (`/manifest.webmanifest`) et le service worker (`/sw.js`) viennent de Paquets
+  (`app.pwa`, dans `src/server/mod.rs`). Les icônes sont dans `public/icons/`.
+- Le service worker garde l'accueil, le bundle des îlots et les icônes à l'installation. Chaque
+  page liste le reste (les trois pages, la feuille de style, les polices) ; `src/client/offline.rs`
+  le redemande dès que le service worker est aux commandes. Le site entier est donc lisible hors
+  ligne après une seule visite.
+- Hors ligne, une adresse jamais visitée retombe sur l'accueil.
+- Les adresses du manifeste passent par le sous-chemin : la même application s'installe depuis
+  Heroku (`/`) et depuis GitHub Pages (`/FLUXA/`).
+
+Un navigateur n'installe une PWA que servie en HTTPS, ou sur `localhost`.
 
 ## Ce qui est interactif
 

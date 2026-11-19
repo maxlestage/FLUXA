@@ -37,6 +37,11 @@ async fn exports_every_page_behind_the_base_path() {
         "site.css",
         "favicon.svg",
         "fonts/hanken-grotesk.woff2",
+        "og-image.png",
+        "icons/icon-192.png",
+        "icons/icon-maskable-512.png",
+        "manifest.webmanifest",
+        "sw.js",
         ".nojekyll",
     ] {
         assert!(out.join(file).is_file(), "{file} manque");
@@ -63,6 +68,38 @@ async fn exports_every_page_behind_the_base_path() {
             }
         }
         assert!(html.contains("https://maxlestage.github.io/FLUXA/"));
+        // La carte de partage a une adresse absolue ; le service worker, celle du site.
+        assert!(html.contains(
+            r#"<meta property="og:image" content="https://maxlestage.github.io/FLUXA/og-image.png"/>"#
+        ));
+        assert!(
+            html.contains(r#"register("/FLUXA/sw.js")"#),
+            "{}",
+            file.display()
+        );
+    }
+    // La page qui dessine la carte de partage n'est pas publiée.
+    assert!(!out.join("carte-de-partage").exists());
+
+    // L'application installée démarre et reste dans le sous-chemin.
+    let manifest = std::fs::read_to_string(out.join("manifest.webmanifest")).unwrap();
+    for field in [
+        r#""start_url":"/FLUXA/""#,
+        r#""scope":"/FLUXA/""#,
+        r#""src":"/FLUXA/icons/icon-192.png""#,
+        r#""src":"/FLUXA/icons/icon-maskable-512.png""#,
+    ] {
+        assert!(manifest.contains(field), "{field}");
+    }
+    let worker = std::fs::read_to_string(out.join("sw.js")).unwrap();
+    assert!(worker.contains(r#"const OFFLINE = "/FLUXA/";"#));
+    let precache = worker
+        .split("const PRECACHE = [")
+        .nth(1)
+        .and_then(|rest| rest.split("];").next())
+        .expect("la liste du service worker");
+    for url in precache.split(',') {
+        assert!(url.starts_with("\"/FLUXA/"), "{url}");
     }
     assert!(links > 100, "{links} liens seulement");
 

@@ -4,9 +4,10 @@
 use paquets::prelude::*;
 
 use super::Site;
+use crate::demo::{Flow, POINTS, SCALE_MAX};
 use crate::islands;
 use crate::profiles;
-use crate::routes::{HOME, PRIVACY, link};
+use crate::routes::{FONTS, HOME, LEGAL, PRIVACY, SHARE_IMAGE, link};
 
 /// Ce qu'une page doit savoir pour écrire ses liens.
 pub struct Ctx<'a> {
@@ -47,6 +48,9 @@ impl Ctx<'_> {
 const LOGO: &str = r##"<svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#171b2e"/><path d="M6 13c4 0 4-5 8-5s4 9 8 9 3-3 4-3" fill="none" stroke="#7cd4fd" stroke-width="2.4" stroke-linecap="round"/><path d="M6 22c3 0 4-3 7-3s4 4 7 4 4-2 6-2" fill="none" stroke="#ffb37a" stroke-width="2.4" stroke-linecap="round"/></svg>"##;
 
 const STORE_ICON: &str = r#"<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10"/><path d="m8 10 4 4 4-4"/><path d="M5 18h14"/></svg>"#;
+
+/// Ce que montre la carte de partage, pour qui ne voit pas l'image.
+const SHARE_ALT: &str = "FLUXA pour iPhone : « Votre connexion, mesurée à la seconde. », à côté d’un tableau de bord qui affiche 42,8 Mb/s en débit descendant.";
 
 const DESCRIPTION: &str = "FLUXA mesure le débit, la latence et la consommation de votre iPhone, gère vos profils de débit et vous guide pour partager votre connexion. Sans compte, sans cloud.";
 
@@ -114,22 +118,36 @@ fn site_header(ctx: &Ctx) -> Element {
 
 /// La mise en page commune : le `<head>`, l'en-tête, le contenu et le pied de page.
 fn layout(ctx: &Ctx, title: &'static str, description: &'static str, content: Element) -> Page {
+    let stylesheet = ctx.site.stylesheet();
+    // Ce que le navigateur garde pour lire le site hors ligne dès la première visite :
+    // les trois pages, la feuille de style, les polices et l'icône.
+    let mut offline = vec![link(HOME), link(PRIVACY), link(LEGAL), stylesheet.clone()];
+    offline.extend(FONTS.map(link));
+    offline.push(link("/favicon.svg"));
     let head = format!(
-        r##"<meta name="theme-color" content="#090b14"/><link rel="icon" href="{icon}" type="image/svg+xml"/><link rel="preload" href="{font}" as="font" type="font/woff2" crossorigin/>"##,
+        r##"<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/><meta name="fluxa-offline" content="{offline}"/><link rel="icon" href="{icon}" type="image/svg+xml"/><link rel="preload" href="{font}" as="font" type="font/woff2" crossorigin/>"##,
+        offline = offline.join(" "),
         icon = link("/favicon.svg"),
-        font = link("/fonts/hanken-grotesk.woff2"),
+        font = link(FONTS[0]),
     );
     Page::new(title)
         .lang("fr")
         .description(description)
         .plain()
-        .stylesheet(format!("{}?v={}", link("/site.css"), ctx.site.css_version))
+        .stylesheet(stylesheet)
         .head(head)
         .seo(
             Seo::new()
                 .site_name("FLUXA")
                 .locale("fr_FR")
-                .canonical(format!("{}{}", ctx.origin, ctx.path)),
+                .canonical(format!("{}{}", ctx.origin, ctx.path))
+                // La carte de partage : une grande image, avec ses dimensions et son texte.
+                .image(format!("{}{SHARE_IMAGE}", ctx.origin))
+                .meta_property("og:image:type", "image/png")
+                .meta_property("og:image:width", "1200")
+                .meta_property("og:image:height", "630")
+                .meta_property("og:image:alt", SHARE_ALT)
+                .meta_name("twitter:image:alt", SHARE_ALT),
         )
         .body(a().class("skip").href("#contenu").text("Aller au contenu"))
         .body(site_header(ctx))
@@ -1221,4 +1239,97 @@ pub fn not_found(ctx: &Ctx) -> Page {
     )
     .seo(Seo::new().noindex(true))
     .status(404)
+}
+
+// ---------- Carte de partage ----------
+
+/// La courbe de la carte : les mêmes données de démonstration que le tableau de bord,
+/// dessinées en SVG par le serveur (la carte est une image, sans script).
+fn share_chart() -> String {
+    const WIDTH: f64 = 372.0;
+    const HEIGHT: f64 = 120.0;
+    let flow = Flow::new(2026);
+    // Le dernier point s'arrête avant le bord, pour que sa pastille reste entière.
+    const LAST: f64 = WIDTH - 6.0;
+    let x = |index: usize| index as f64 * LAST / POINTS as f64;
+    let y = |mbps: f64| HEIGHT - 4.0 - mbps / SCALE_MAX * (HEIGHT - 12.0);
+    let line = |series: &[f64]| {
+        series
+            .iter()
+            .enumerate()
+            .map(|(index, value)| format!("{:.1},{:.1}", x(index), y(*value)))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let down = line(flow.down());
+    let up = line(flow.up());
+    let (last_down, last_up) = flow.latest();
+    format!(
+        r##"<svg viewBox="0 0 {WIDTH} {HEIGHT}" width="{WIDTH}" height="{HEIGHT}" aria-hidden="true"><defs><linearGradient id="aire" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cd4fd" stop-opacity="0.34"/><stop offset="1" stop-color="#7cd4fd" stop-opacity="0"/></linearGradient></defs><line x1="0" x2="{WIDTH}" y1="{g40:.1}" y2="{g40:.1}" stroke="#1b1f35"/><line x1="0" x2="{WIDTH}" y1="{g20:.1}" y2="{g20:.1}" stroke="#1b1f35"/><polygon points="0,{HEIGHT} {down} {LAST},{HEIGHT}" fill="url(#aire)"/><polyline points="{down}" fill="none" stroke="#7cd4fd" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><polyline points="{up}" fill="none" stroke="#ffb37a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="{LAST}" cy="{cy_down:.1}" r="4.5" fill="#7cd4fd" stroke="#090b14" stroke-width="2"/><circle cx="{LAST}" cy="{cy_up:.1}" r="4" fill="#ffb37a" stroke="#090b14" stroke-width="2"/></svg>"##,
+        g40 = y(40.0),
+        g20 = y(20.0),
+        cy_down = y(last_down),
+        cy_up = y(last_up),
+    )
+}
+
+/// La carte de partage, à capturer en 1200 × 630 pour refaire `public/og-image.png`.
+pub fn share_card(ctx: &Ctx) -> Page {
+    Page::new("Carte de partage · FLUXA")
+        .lang("fr")
+        .plain()
+        .stylesheet(ctx.site.stylesheet())
+        .seo(Seo::new().noindex(true))
+        .body(
+            main()
+                .class("sharecard")
+                .child(
+                    div()
+                        .class("sharecard__copy")
+                        .child(
+                            div()
+                                .class("brand")
+                                .child(span().class("brand__mark").html(LOGO))
+                                .child(span().class("brand__name").text("FLUXA")),
+                        )
+                        .child(h1().text("Votre connexion, mesurée à la seconde."))
+                        .child(p().text(
+                            "Débit, latence et consommation de votre iPhone. Sans compte, sans cloud.",
+                        ))
+                        .child(
+                            div()
+                                .class("sharecard__pills")
+                                .child(pill("pill--ok", "Pris en charge"))
+                                .child(pill("pill--sim", "Simulé"))
+                                .child(pill("pill--no", "Réservé à iOS")),
+                        ),
+                )
+                .child(
+                    div()
+                        .class("sharecard__panel")
+                        .child(
+                            div()
+                                .class("app__bar")
+                                .child(span().class("app__title").text("Tableau de bord"))
+                                .child(pill("pill--ok", "Connecté")),
+                        )
+                        .child(p().class("app__label").text("Débit descendant"))
+                        .child(
+                            p().class("app__big")
+                                .child(span().text("42,8"))
+                                .child(small().text("Mb/s")),
+                        )
+                        .child(p().class("app__up").text("↑ 8,4 Mb/s montant"))
+                        .child(div().class("sharecard__chart").html(share_chart()))
+                        .child(
+                            dl().class("app__tiles")
+                                .child(
+                                    div()
+                                        .child(dt().text("Latence"))
+                                        .child(dd().text("28 ms")),
+                                )
+                                .child(div().child(dt().text("Gigue")).child(dd().text("4 ms"))),
+                        ),
+                ),
+        )
 }
