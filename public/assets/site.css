@@ -340,6 +340,8 @@ h3 { font: 600 var(--fs-3)/1.25 var(--font-body); letter-spacing: -0.005em; }
 .meter__fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 5px; background: var(--c); transition: width 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .meter__fill.is-open { background: repeating-linear-gradient(90deg, var(--c) 0 6px, transparent 6px 10px); }
 .meter--down { --c: var(--down); }
+#m-down { width: 59.9%; }
+#m-up { width: 50%; }
 .meter--up { --c: var(--up); }
 .scale { display: flex; justify-content: space-between; margin-top: -8px; font: 400 0.6875rem/1 var(--font-data); color: var(--text-3); }
 .scale__unit { text-align: right; margin-top: 6px; font: 400 0.6875rem/1 var(--font-data); color: var(--text-3); }
@@ -397,6 +399,10 @@ h3 { font: 600 var(--fs-3)/1.25 var(--font-body); letter-spacing: -0.005em; }
 .retention__bars .row span:last-child { font-family: var(--font-data); font-variant-numeric: tabular-nums; color: var(--text); }
 .retention__bars .bar { height: 6px; border-radius: 3px; background: var(--ink-2); }
 .retention__bars .bar i { display: block; height: 100%; border-radius: 3px; background: var(--text-2); }
+/* Largeurs à l'échelle d'une année : 7 jours, 30 jours, 12 mois */
+.retention__bars .w-7j { width: 4%; }
+.retention__bars .w-30j { width: 9%; }
+.retention__bars .w-12m { width: 100%; }
 .retention p { font-size: var(--fs-0); color: var(--text-3); }
 @media (min-width: 900px) { .privacy { grid-template-columns: 1fr 1fr; gap: 64px; } }
 
@@ -420,7 +426,7 @@ h3 { font: 600 var(--fs-3)/1.25 var(--font-body); letter-spacing: -0.005em; }
 .frac { display: inline-grid; text-align: center; }
 .frac span:first-child { padding: 0 6px 6px; border-bottom: 1px solid var(--text-2); }
 .frac span:last-child { padding: 6px 6px 0; }
-.goals { display: grid; }
+.goals { display: grid; margin-top: 14px; }
 .goals > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding-block: 13px; border-top: 1px solid var(--line-soft); font-size: var(--fs-1); }
 .goals dt { color: var(--text-2); }
 .goals dd { font-family: var(--font-data); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }

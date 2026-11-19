@@ -200,11 +200,11 @@
           <div class="meters">
             <div class="meter meter--down">
               <div class="meter__row"><span class="meter__name">↓ Plafond descendant</span><span class="meter__val dn" id="v-down">25 Mb/s</span></div>
-              <div class="meter__track"><div class="meter__fill" id="m-down" style="width:59.9%"></div></div>
+              <div class="meter__track"><div class="meter__fill" id="m-down"></div></div>
             </div>
             <div class="meter meter--up">
               <div class="meter__row"><span class="meter__name">↑ Plafond montant</span><span class="meter__val upc" id="v-up">10 Mb/s</span></div>
-              <div class="meter__track"><div class="meter__fill" id="m-up" style="width:50%"></div></div>
+              <div class="meter__track"><div class="meter__fill" id="m-up"></div></div>
             </div>
             <div>
               <div class="scale" aria-hidden="true"><span>0,1</span><span>1</span><span>10</span><span>100</span><span>1 000</span></div>
@@ -318,9 +318,9 @@
         <div class="retention" id="conservation">
           <h3>Durées de conservation</h3>
           <ul class="retention__bars">
-            <li><div class="row"><span>Mesures détaillées</span><span>7 jours</span></div><div class="bar"><i style="width:4%"></i></div></li>
-            <li><div class="row"><span>Agrégats horaires</span><span>30 jours</span></div><div class="bar"><i style="width:9%"></i></div></li>
-            <li><div class="row"><span>Agrégats journaliers</span><span>12 mois</span></div><div class="bar"><i style="width:100%"></i></div></li>
+            <li><div class="row"><span>Mesures détaillées</span><span>7 jours</span></div><div class="bar"><i class="w-7j"></i></div></li>
+            <li><div class="row"><span>Agrégats horaires</span><span>30 jours</span></div><div class="bar"><i class="w-30j"></i></div></li>
+            <li><div class="row"><span>Agrégats journaliers</span><span>12 mois</span></div><div class="bar"><i class="w-12m"></i></div></li>
           </ul>
           <p>Barres à l’échelle d’une année. L’historique des profils suit une durée que vous réglez.</p>
           <p><a class="btn btn--ghost btn--sm" href="confidentialite.html">Lire la politique de confidentialité</a></p>
@@ -392,7 +392,7 @@
 
           <div>
             <h3>Objectifs de qualité de la V1</h3>
-            <dl class="goals" style="margin-top:14px">
+            <dl class="goals">
               <div><dt>Démarrage du moteur</dt><dd>&lt; 500 ms</dd></div>
               <div><dt>Délai d’affichage d’une mesure</dt><dd>1 à 2 s</dd></div>
               <div><dt>Écart sur les compteurs, test contrôlé</dt><dd>&lt; 5 %</dd></div>

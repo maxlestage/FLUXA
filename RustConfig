@@ -1,0 +1,5 @@
+# Heroku avec le buildpack emk/rust
+# (https://elements.heroku.com/buildpacks/emk/heroku-buildpack-rust).
+# Le buildpack lit ce fichier, installe Rust, lance `cargo build --release` à la
+# racine et garde le binaire target/release/fluxa-site, que le Procfile démarre.
+VERSION=stable

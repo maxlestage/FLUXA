@@ -1,0 +1,16 @@
+[package]
+name = "fluxa-site"
+version = "0.1.0"
+edition = "2024"
+description = "Le site de présentation de FLUXA, servi par un petit serveur Rust."
+publish = false
+
+[dependencies]
+# Compression gzip des pages, faite une fois au démarrage.
+flate2 = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
