@@ -9,6 +9,22 @@ pub const HOME: &str = "/";
 pub const PRIVACY: &str = "/confidentialite/";
 pub const LEGAL: &str = "/mentions-legales/";
 
+/// L'image affichée quand on partage un lien du site (1200 × 630).
+pub const SHARE_IMAGE: &str = "/og-image.png";
+/// La page qui dessine cette image. Elle n'est ni dans le plan du site ni exportée : on
+/// l'ouvre pour refaire la capture (voir `site/README.md`).
+pub const SHARE_CARD: &str = "/carte-de-partage/";
+
+/// Les icônes de l'application installée.
+pub const ICON_192: &str = "/icons/icon-192.png";
+pub const ICON_512: &str = "/icons/icon-512.png";
+pub const ICON_MASKABLE: &str = "/icons/icon-maskable-512.png";
+pub const FONTS: [&str; 3] = [
+    "/fonts/hanken-grotesk.woff2",
+    "/fonts/bricolage-grotesque.woff2",
+    "/fonts/jetbrains-mono.woff2",
+];
+
 /// Les pages du site, dans l'ordre du plan.
 pub const PAGES: [&str; 3] = [HOME, PRIVACY, LEGAL];
 

@@ -75,9 +75,12 @@ pub async fn export(out: &Path, base_path: &str, site_url: Option<String>) -> io
     // GitHub Pages sert 404.html pour toute adresse inconnue.
     let missing = get("/page-introuvable/", 404).await?;
     write("404.html", with_base(&missing, &base).as_bytes())?;
-    for file in ["/sitemap.xml", "/robots.txt"] {
+    for file in ["/sitemap.xml", "/robots.txt", "/manifest.webmanifest"] {
         write(file, get(file, 200).await?.as_bytes())?;
     }
+    // Le service worker garde le bundle des îlots, dont l'adresse reçoit le sous-chemin.
+    let worker = get("/sw.js", 200).await?;
+    write("/sw.js", with_base(&worker, &base).as_bytes())?;
     for folder in ["public", "pkg"] {
         let root = dir.join(folder);
         let prefix = if folder == "pkg" { "pkg/" } else { "" };
@@ -96,13 +99,18 @@ pub async fn export(out: &Path, base_path: &str, site_url: Option<String>) -> io
     Ok(written)
 }
 
-/// Les adresses que Paquets écrit lui-même (le chargeur des îlots : `/pkg/…`) ne
-/// connaissent pas le sous-chemin : elles le reçoivent ici. Les liens du site l'ont déjà.
+/// Les adresses que Paquets écrit lui-même (le chargeur des îlots `/pkg/…`, le manifeste
+/// et le service worker de la PWA) ne connaissent pas le sous-chemin : elles le reçoivent ici. Les liens du site l'ont déjà.
 pub fn with_base(html: &str, base: &str) -> String {
     if base.is_empty() {
         return html.to_owned();
     }
     html.replace("\"/pkg/", &format!("\"{base}/pkg/"))
+        .replace(
+            "\"/manifest.webmanifest\"",
+            &format!("\"{base}/manifest.webmanifest\""),
+        )
+        .replace("\"/sw.js\"", &format!("\"{base}/sw.js\""))
 }
 
 /// Tous les fichiers de `dir`, récursivement.

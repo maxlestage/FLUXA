@@ -570,3 +570,42 @@ h3 { font: 600 var(--fs-3)/1.25 var(--font-body); letter-spacing: -0.005em; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+
+/* ---------- Carte de partage : la page capturée en 1200 × 630 pour og-image.png ---------- */
+.sharecard {
+  position: relative;
+  width: 1200px;
+  height: 630px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  align-items: center;
+  gap: 64px;
+  padding: 0 72px;
+  background:
+    radial-gradient(520px 520px at 88% 12%, color-mix(in srgb, var(--down) 20%, transparent), transparent 70%),
+    radial-gradient(620px 620px at 6% 110%, color-mix(in srgb, var(--up) 10%, transparent), transparent 70%),
+    var(--ink-0);
+}
+.sharecard__copy { display: grid; gap: 26px; justify-items: start; }
+.sharecard .brand svg { width: 52px; height: 52px; }
+.sharecard .brand__name { font-size: 2.125rem; }
+.sharecard h1 { font-size: 4.375rem; line-height: 1.02; letter-spacing: -0.025em; }
+.sharecard__copy > p { font-size: 1.625rem; line-height: 1.4; color: var(--text-2); max-width: 34rem; }
+.sharecard__pills { display: flex; gap: 12px; }
+.sharecard__pills .pill { font-size: 1.0625rem; }
+.sharecard__panel {
+  display: grid;
+  gap: 14px;
+  padding: 28px 24px;
+  border-radius: 34px;
+  background: var(--ink-0);
+  border: 1px solid var(--line);
+  box-shadow: 0 0 0 9px var(--bezel-lo), 0 0 0 10px var(--line), 0 0 140px -30px color-mix(in srgb, var(--down) 45%, transparent);
+}
+.sharecard__panel .app__title { font-size: 1.25rem; }
+.sharecard__panel .app__big { font-size: 4.25rem; }
+.sharecard__panel .app__big small { font-size: 1.25rem; }
+.sharecard__panel .app__up { font-size: 1.0625rem; }
+.sharecard__panel .app__tiles dd { font-size: 1.125rem; }
+.sharecard__chart svg { display: block; width: 100%; height: auto; }
