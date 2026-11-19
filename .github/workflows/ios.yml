@@ -1,0 +1,90 @@
+# L'app iOS, en Swift : la logique (FluxaCore) est testée sous Linux et macOS, puis
+# l'app est compilée pour le simulateur, lancée, et une capture d'écran est gardée.
+#
+# Aucune signature ici : la publication (TestFlight, App Store) demande un compte
+# développeur Apple et se fait depuis Xcode.
+
+name: iOS
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: FluxaCore (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Test
+        working-directory: ios/FluxaCore
+        run: swift test
+
+  app:
+    name: App (iOS simulator)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode version
+        run: xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate the Xcode project
+        working-directory: ios
+        run: xcodegen generate
+      - name: Build for the simulator
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -quiet \
+            -project Fluxa.xcodeproj -scheme Fluxa -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+      - name: Launch in a simulator and take screenshots
+        working-directory: ios
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          device=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          runtimes = json.load(sys.stdin)['devices']
+          for runtime in sorted((r for r in runtimes if 'iOS' in r), reverse=True):
+              for device in runtimes[runtime]:
+                  if device['name'].startswith('iPhone'):
+                      print(device['udid'])
+                      sys.exit(0)
+          sys.exit('no iPhone simulator')
+          ")
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+          xcrun simctl install "$device" build/Build/Products/Debug-iphonesimulator/Fluxa.app
+          xcrun simctl launch "$device" app.fluxa.ios
+          mkdir -p screenshots
+          sleep 15
+          xcrun simctl io "$device" screenshot screenshots/dashboard.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: ios/screenshots
+          if-no-files-found: ignore
