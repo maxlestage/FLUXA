@@ -26,7 +26,7 @@ public final class FluxaEngine {
     let now: () -> Date
 
     var state: EngineState
-    var meter: InterfaceMeter
+    private var meter: InterfaceMeter
     private var latency = LatencyWindow(capacity: FluxaEngine.latencyProbes)
     private var pathKind: NetworkKind = .offline
     private var pathOnline = false
@@ -583,7 +583,7 @@ public final class FluxaEngine {
 
     // Conservation : minutes 7 jours, heures 30 jours, jours 12 mois.
 
-    func minuteCutoff(at date: Date) -> Date {
+    private func minuteCutoff(at date: Date) -> Date {
         date.addingTimeInterval(-7 * 86_400)
     }
 
@@ -591,7 +591,7 @@ public final class FluxaEngine {
         date.addingTimeInterval(-30 * 86_400)
     }
 
-    func dayCutoff(at date: Date) -> Date {
+    private func dayCutoff(at date: Date) -> Date {
         calendar.date(byAdding: .month, value: -12, to: date) ?? date.addingTimeInterval(-365 * 86_400)
     }
 
