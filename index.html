@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FLUXA pour iPhone</title>
+<meta name="description" content="FLUXA mesure le débit, la latence et la consommation de votre iPhone, gère vos profils de débit et vous guide pour partager votre connexion. Sans compte, sans cloud.">
+<meta name="theme-color" content="#090b14">
+<meta property="og:title" content="FLUXA pour iPhone">
+<meta property="og:description" content="Votre connexion, mesurée à la seconde. Sans compte, sans cloud.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_FR">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&amp;family=Hanken+Grotesk:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body id="haut">
+<a class="skip" href="#contenu">Aller au contenu</a>
+
+<!-- header:start -->
+<header class="header">
+  <div class="wrap header__row">
+    <a class="brand" href="#haut" aria-label="FLUXA, accueil">
+      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#171b2e"/><path d="M6 13c4 0 4-5 8-5s4 9 8 9 3-3 4-3" fill="none" stroke="#7cd4fd" stroke-width="2.4" stroke-linecap="round"/><path d="M6 22c3 0 4-3 7-3s4 4 7 4 4-2 6-2" fill="none" stroke="#ffb37a" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <span class="brand__name">FLUXA</span>
+    </a>
+    <button class="menu-btn" id="menu-btn" type="button" aria-expanded="false" aria-controls="nav">
+      <span class="menu-btn__bars" aria-hidden="true"></span><span class="menu-btn__label">Menu</span>
+    </button>
+    <nav class="nav" id="nav" aria-label="Navigation principale">
+      <ul>
+        <li><a href="#fonctions">Fonctions</a></li>
+        <li><a href="#profils">Profils</a></li>
+        <li><a href="#transparence">Transparence</a></li>
+        <li><a href="#confidentialite">Confidentialité</a></li>
+        <li><a href="#faq">Questions</a></li>
+      </ul>
+      <a class="btn btn--primary btn--sm" href="#telecharger">Bientôt sur l’App Store</a>
+    </nav>
+  </div>
+</header>
+<!-- header:end -->
+
+<main id="contenu">
+
+  <!-- ===== Héros ===== -->
+  <section class="hero" aria-labelledby="titre">
+    <div class="wrap hero__grid">
+      <div class="hero__copy">
+        <p class="eyebrow">Pour iPhone · V1 en développement</p>
+        <h1 id="titre">Votre connexion, mesurée à la seconde.</h1>
+        <p class="hero__lead">FLUXA suit le débit, la latence et la consommation de votre iPhone, garde vos profils de débit sous la main et vous guide pour partager votre connexion. Tout reste sur l’appareil.</p>
+        <div class="hero__cta">
+          <a class="btn btn--primary" href="#telecharger">Bientôt sur l’App Store</a>
+          <a class="btn btn--ghost" href="#fonctions">Voir les fonctions</a>
+        </div>
+        <ul class="hero__facts">
+          <li>Sans compte</li>
+          <li>Sans cloud</li>
+          <li>Statut réel de chaque fonction</li>
+        </ul>
+      </div>
+
+      <figure class="phone">
+        <div class="phone__body">
+          <div class="phone__screen">
+            <div class="phone__island" aria-hidden="true"></div>
+            <div class="app">
+              <div class="app__bar">
+                <span class="app__title">Tableau de bord</span>
+                <span class="pill pill--ok">Connecté</span>
+              </div>
+              <div class="app__net"><span class="tag">5G</span><span>Réseau mobile</span></div>
+              <p class="app__label">Débit descendant</p>
+              <p class="app__big"><span id="d-down">42,8</span><small>Mb/s</small></p>
+              <p class="app__up">↑ <span id="d-up">8,4</span> Mb/s montant</p>
+              <canvas class="app__chart" id="flux" role="img" aria-label="Courbe de démonstration des débits descendant et montant sur les trente dernières secondes, échelle de 0 à 60 Mb/s"></canvas>
+              <dl class="app__tiles">
+                <div><dt>Latence</dt><dd><span id="d-lat">28</span> <small>ms</small></dd></div>
+                <div><dt>Gigue</dt><dd><span id="d-jit">4</span> <small>ms</small></dd></div>
+                <div><dt>Aujourd’hui</dt><dd>1,2 <small>Go</small></dd></div>
+                <div><dt>Profil</dt><dd>Streaming <small>simulé</small></dd></div>
+              </dl>
+              <ul class="app__tabs" aria-hidden="true">
+                <li aria-current="page">Réseau</li>
+                <li>Partage</li>
+                <li>Profils</li>
+                <li>Historique</li>
+              </ul>
+              <div class="app__home" aria-hidden="true"></div>
+            </div>
+          </div>
+        </div>
+        <figcaption>Aperçu de l’interface avec des données de démonstration, rafraîchies chaque seconde comme dans l’app.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ===== Cadences ===== -->
+  <section class="cadence" aria-label="Cadences de mesure">
+    <div class="wrap">
+      <dl>
+        <div><dt class="dn">1 s</dt><dd>Débit instantané</dd></div>
+        <div><dt>5 s</dt><dd>Latence et gigue</dd></div>
+        <div><dt>1 à 5 s</dt><dd>Consommation</dd></div>
+        <div><dt>1 min</dt><dd>Historique</dd></div>
+      </dl>
+      <p class="cadence__note">Cadences visées quand l’app est au premier plan. iOS limite l’exécution en arrière-plan, et FLUXA ne prétend pas le contraire.</p>
+    </div>
+  </section>
+
+  <!-- ===== Fonctions ===== -->
+  <section class="section" id="fonctions" aria-labelledby="h-fonctions">
+    <div class="wrap">
+      <div class="section__head">
+        <p class="eyebrow">Fonctions</p>
+        <h2 id="h-fonctions">Ce que l’app fait sur iPhone</h2>
+        <p>Chaque fonction porte son statut, comme dans l’app. Vous savez ce qui est pris en charge, ce qui est simulé et ce qu’iOS garde pour lui.</p>
+        <div class="legend" aria-label="Légende des statuts">
+          <span class="pill pill--ok">Pris en charge</span>
+          <span class="pill pill--sim">Simulé</span>
+          <span class="pill pill--sys">Guide</span>
+          <span class="pill pill--no">Réservé à iOS</span>
+        </div>
+      </div>
+
+      <ul class="feats">
+        <li class="feat" id="f-tableau">
+          <div class="feat__head"><h3>Tableau de bord</h3><span class="pill pill--ok">Pris en charge</span></div>
+          <p>Débit descendant et montant, latence, gigue, type de réseau et consommation sur un seul écran.</p>
+          <p class="feat__meta">Rafraîchi chaque seconde au premier plan</p>
+        </li>
+        <li class="feat" id="f-test">
+          <div class="feat__head"><h3>Test de débit</h3><span class="pill pill--ok">Pris en charge</span></div>
+          <p>Lancez une mesure quand vous voulez et retrouvez-la dans l’historique, à côté des précédentes.</p>
+          <p class="feat__meta">À la demande</p>
+        </li>
+        <li class="feat" id="f-reseau">
+          <div class="feat__head"><h3>Mon réseau</h3><span class="pill pill--ok">Pris en charge</span></div>
+          <p>Wi-Fi, 4G ou 5G. FLUXA suit les changements de réseau signalés par iOS et vérifie qu’Internet répond.</p>
+          <p class="feat__meta">Sur événement système</p>
+        </li>
+        <li class="feat" id="f-partage">
+          <div class="feat__head"><h3>Partage de connexion</h3><span class="pill pill--sys">Guide</span></div>
+          <p>iOS garde la main sur le partage. Un bouton ouvre les Réglages et un guide vous accompagne jusqu’à l’activation.</p>
+          <p class="feat__meta">Activation dans Réglages iOS</p>
+        </li>
+        <li class="feat" id="f-profils">
+          <div class="feat__head"><h3>Profils</h3><span class="pill pill--ok">Pris en charge</span></div>
+          <p>Sept préréglages, d’Économie à Maximum, tous modifiables. Ajoutez les vôtres et changez de profil d’un geste.</p>
+          <p class="feat__meta">7 préréglages modifiables</p>
+        </li>
+        <li class="feat" id="f-limiteur">
+          <div class="feat__head"><h3>Limiteur de débit</h3><span class="pill pill--sim">Simulé</span></div>
+          <p>Réglez un plafond dans chaque sens. Sur iPhone, FLUXA en simule l’effet sur votre débit mesuré et ne l’annonce jamais comme appliqué au partage.</p>
+          <p class="feat__meta">De 0,1 à 1 000 Mb/s</p>
+        </li>
+        <li class="feat" id="f-historique">
+          <div class="feat__head"><h3>Historique</h3><span class="pill pill--ok">Pris en charge</span></div>
+          <p>Débit et consommation par heure, par jour et par semaine, avec les pics et les saturations repérés.</p>
+          <p class="feat__meta">Agrégé chaque minute</p>
+        </li>
+        <li class="feat" id="f-automatisations">
+          <div class="feat__head"><h3>Automatisations</h3><span class="pill pill--ok">Pris en charge</span></div>
+          <p>Une alerte après un seuil de consommation, un profil selon l’heure, le retour au profil précédent après une durée.</p>
+          <p class="feat__meta">Sur les données locales, pas sur le partage</p>
+        </li>
+        <li class="feat" id="f-diagnostic">
+          <div class="feat__head"><h3>Centre de diagnostic</h3><span class="pill pill--ok">Pris en charge</span></div>
+          <p>Les capacités détectées sur votre iPhone, le journal du moteur et les erreurs, réunis au même endroit.</p>
+          <p class="feat__meta">Capacités vérifiées au démarrage</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Profils ===== -->
+  <section class="section section--alt" id="profils" aria-labelledby="h-profils">
+    <div class="wrap">
+      <div class="section__head">
+        <p class="eyebrow">Profils et limites</p>
+        <h2 id="h-profils">Configuré ne veut pas dire appliqué</h2>
+        <p>Choisissez un profil. FLUXA enregistre le plafond, vérifie ce que l’iPhone autorise, puis affiche le statut exact.</p>
+      </div>
+
+      <div class="lab" id="lab">
+        <div class="lab__chips" role="group" aria-label="Profil de connexion">
+          <button class="chip" type="button" aria-pressed="false">Économie</button>
+          <button class="chip" type="button" aria-pressed="false">Très lent</button>
+          <button class="chip" type="button" aria-pressed="false">Navigation</button>
+          <button class="chip" type="button" aria-pressed="false">Standard</button>
+          <button class="chip" type="button" aria-pressed="true">Streaming</button>
+          <button class="chip" type="button" aria-pressed="false">Performance</button>
+          <button class="chip" type="button" aria-pressed="false">Maximum</button>
+        </div>
+
+        <div class="lab__panel">
+          <div class="meters">
+            <div class="meter meter--down">
+              <div class="meter__row"><span class="meter__name">↓ Plafond descendant</span><span class="meter__val dn" id="v-down">25 Mb/s</span></div>
+              <div class="meter__track"><div class="meter__fill" id="m-down" style="width:59.9%"></div></div>
+            </div>
+            <div class="meter meter--up">
+              <div class="meter__row"><span class="meter__name">↑ Plafond montant</span><span class="meter__val upc" id="v-up">10 Mb/s</span></div>
+              <div class="meter__track"><div class="meter__fill" id="m-up" style="width:50%"></div></div>
+            </div>
+            <div>
+              <div class="scale" aria-hidden="true"><span>0,1</span><span>1</span><span>10</span><span>100</span><span>1 000</span></div>
+              <p class="scale__unit">Mb/s, échelle logarithmique</p>
+            </div>
+          </div>
+
+          <dl class="verdict">
+            <div><dt>Enregistré dans FLUXA</dt><dd><span class="pill pill--ok">Configuré</span></dd></div>
+            <div><dt>Appliqué au partage de connexion</dt><dd><span class="pill pill--no">Réservé à iOS</span></dd></div>
+            <div><dt>Statut affiché dans l’app</dt><dd><span class="pill pill--sim">Simulé</span></dd></div>
+          </dl>
+
+          <p class="lab__effect" id="lab-effect" aria-live="polite">Simulation sur le débit mesuré : le descendant passerait de <strong>42,8 Mb/s</strong> à <strong>25 Mb/s</strong> et le montant resterait à <strong>8,4 Mb/s</strong>, sous le plafond.</p>
+        </div>
+
+        <div class="lab__side">
+          <h3>Des préréglages, pas des promesses</h3>
+          <p>Les valeurs d’un profil sont des points de départ que vous modifiez librement. Ce ne sont pas des débits garantis.</p>
+          <p>Vous réglez aussi la façon de limiter et la durée, d’une minute à sans limite de temps.</p>
+          <ul class="modes" aria-label="Modes de limitation configurables">
+            <li>Plafond strict</li>
+            <li>Débit cible</li>
+            <li>Partage équitable</li>
+            <li>Priorités</li>
+            <li>Plage horaire</li>
+            <li>Réduction d’urgence</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Transparence ===== -->
+  <section class="section" id="transparence" aria-labelledby="h-transparence">
+    <div class="wrap">
+      <div class="section__head">
+        <p class="eyebrow">Transparence</p>
+        <h2 id="h-transparence">Ce qu’iOS autorise, sans détour</h2>
+        <p>Le partage de connexion appartient à iOS. Apple ne l’ouvre pas aux apps, et FLUXA ne cherche pas à contourner cette règle.</p>
+      </div>
+
+      <blockquote class="rule" id="regle">
+        <p>Aucune limitation de débit n’est annoncée comme effective tant que le système n’a pas confirmé son application.</p>
+        <footer>La règle que suit chaque écran de l’app</footer>
+      </blockquote>
+
+      <div class="caps" id="capacites">
+        <div>
+          <h3>Ce que FLUXA fait</h3>
+          <ul class="caps__list">
+            <li><span>Mesurer la connexion de l’iPhone</span><span class="pill pill--ok">Oui</span></li>
+            <li><span>Tester le débit Internet</span><span class="pill pill--ok">Oui</span></li>
+            <li><span>Tracer les graphiques et l’historique</span><span class="pill pill--ok">Oui</span></li>
+            <li><span>Gérer des profils de débit</span><span class="pill pill--ok">Oui, dans l’app</span></li>
+            <li><span>Créer un VPN local facultatif</span><span class="pill pill--sim">Sous conditions</span></li>
+          </ul>
+          <p class="caps__note">Le VPN local ne traite que le trafic de l’iPhone passé par le tunnel, jamais celui des appareils reliés au partage.</p>
+        </div>
+        <div>
+          <h3>Ce qu’iOS garde pour lui</h3>
+          <ul class="caps__list">
+            <li><span>Activer le partage depuis une app</span><span class="pill pill--no">Non</span></li>
+            <li><span>Limiter le débit du partage</span><span class="pill pill--no">Non</span></li>
+            <li><span>Déconnecter un appareil du partage</span><span class="pill pill--no">Non</span></li>
+            <li><span>Identifier tous les appareils connectés</span><span class="pill pill--sim">Non garanti</span></li>
+          </ul>
+          <p class="caps__note">Quand une information est inconnue, l’app l’indique. Elle n’invente ni nom d’appareil ni adresse MAC.</p>
+        </div>
+      </div>
+
+      <div class="code">
+        <p class="code__label">Au démarrage, le moteur détecte ce que votre iPhone permet. L’interface n’affiche que ce qui en découle. Exemple illustratif :</p>
+<pre><code>{
+  <span class="k">"platform"</span>: <span class="s">"ios"</span>,
+  <span class="k">"capabilities"</span>: {
+    <span class="k">"internet_monitoring"</span>: <span class="t">true</span>,
+    <span class="k">"hotspot_activation"</span>: <span class="f">false</span>,
+    <span class="k">"hotspot_client_discovery"</span>: <span class="f">false</span>,
+    <span class="k">"per_device_shaping"</span>: <span class="f">false</span>,
+    <span class="k">"local_vpn"</span>: <span class="t">true</span>
+  }
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Confidentialité ===== -->
+  <section class="section section--alt" id="confidentialite" aria-labelledby="h-confidentialite">
+    <div class="wrap">
+      <div class="section__head">
+        <p class="eyebrow">Confidentialité</p>
+        <h2 id="h-confidentialite">Vos mesures restent sur votre iPhone</h2>
+        <p>FLUXA fonctionne sans compte et sans serveur. Les statistiques sont enregistrées dans une base locale et y restent.</p>
+      </div>
+
+      <div class="privacy">
+        <div>
+          <ul class="never">
+            <li><div><strong>Aucun contenu de communication collecté</strong><span>L’app compte des octets. Elle ne lit pas ce qu’ils transportent.</span></div></li>
+            <li><div><strong>Aucun mot de passe Wi-Fi enregistré</strong><span>FLUXA n’en a pas besoin et n’y accède pas.</span></div></li>
+            <li><div><strong>Aucun envoi automatique vers un serveur</strong><span>Il n’y a pas de cloud dans la V1.</span></div></li>
+          </ul>
+          <ul class="never never--yes">
+            <li><div><strong>Autorisations demandées au moment utile</strong><span>Jamais en bloc au premier lancement.</span></div></li>
+            <li><div><strong>Informations sensibles chiffrées</strong><span>Dans le stockage local de l’iPhone.</span></div></li>
+            <li id="suppression"><div><strong>Tout l’historique effaçable à la demande</strong><span>Une action dans les réglages de l’app supprime l’ensemble.</span></div></li>
+          </ul>
+        </div>
+
+        <div class="retention" id="conservation">
+          <h3>Durées de conservation</h3>
+          <ul class="retention__bars">
+            <li><div class="row"><span>Mesures détaillées</span><span>7 jours</span></div><div class="bar"><i style="width:4%"></i></div></li>
+            <li><div class="row"><span>Agrégats horaires</span><span>30 jours</span></div><div class="bar"><i style="width:9%"></i></div></li>
+            <li><div class="row"><span>Agrégats journaliers</span><span>12 mois</span></div><div class="bar"><i style="width:100%"></i></div></li>
+          </ul>
+          <p>Barres à l’échelle d’une année. L’historique des profils suit une durée que vous réglez.</p>
+          <p><a class="btn btn--ghost btn--sm" href="confidentialite.html">Lire la politique de confidentialité</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Technologie ===== -->
+  <section class="section" id="technologie" aria-labelledby="h-technologie">
+    <div class="wrap">
+      <div class="section__head">
+        <p class="eyebrow">Sous le capot</p>
+        <h2 id="h-technologie">Un moteur Rust sous une interface SwiftUI</h2>
+        <p>La logique de mesure et de règles vit dans un moteur en Rust, testé sans l’interface. Tout ce qui touche au système passe par les API natives d’Apple.</p>
+      </div>
+
+      <div class="tech">
+        <div class="stack" aria-label="Architecture de l’application, de l’interface au système">
+          <div class="stack__layer" id="t-swiftui">
+            <span class="stack__role">Interface</span>
+            <span class="stack__name">SwiftUI</span>
+            <p>Écrans natifs et graphiques Swift Charts.</p>
+          </div>
+          <div class="stack__link" aria-hidden="true"></div>
+          <div class="stack__layer" id="t-uniffi">
+            <span class="stack__role">Pont</span>
+            <span class="stack__name">UniFFI</span>
+            <p>Une API typée entre Swift et Rust. Chaque valeur est validée avant d’atteindre le moteur.</p>
+          </div>
+          <div class="stack__link" aria-hidden="true"></div>
+          <div class="stack__layer stack__layer--core" id="t-rust">
+            <span class="stack__role">Moteur</span>
+            <span class="stack__name">Rust</span>
+            <ul class="stack__mods">
+              <li>Network Monitor</li>
+              <li>Bandwidth Manager</li>
+              <li>Traffic Analytics</li>
+              <li>Policy Engine</li>
+              <li>Profile Manager</li>
+              <li>Scheduler</li>
+              <li>Alert Manager</li>
+              <li>Capability Manager</li>
+              <li>Device Registry</li>
+              <li>Diagnostics</li>
+              <li id="t-sqlite">Persistence · SQLite</li>
+            </ul>
+          </div>
+          <div class="stack__link" aria-hidden="true"></div>
+          <div class="stack__layer" id="t-ios">
+            <span class="stack__role">Système</span>
+            <span class="stack__name">Adaptateur iOS</span>
+            <p>Network.framework, et NetworkExtension pour les seules fonctions qu’Apple autorise.</p>
+          </div>
+        </div>
+
+        <div class="tech__side">
+          <div class="formula">
+            <h3>Comment le débit est calculé</h3>
+            <p>Deux relevés des compteurs d’octets, une soustraction, une division par le temps écoulé. Chaque compteur garde sa source et son périmètre.</p>
+            <div class="formula__eq" role="math" aria-label="Débit égale octets au second relevé moins octets au premier relevé, multiplié par huit, divisé par le temps écoulé entre les deux relevés">
+              <div>
+                <span>débit</span><span>=</span>
+                <span class="frac"><span>(octets₂ − octets₁) × 8</span><span>t₂ − t₁</span></span>
+                <span>bit/s</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3>Objectifs de qualité de la V1</h3>
+            <dl class="goals" style="margin-top:14px">
+              <div><dt>Démarrage du moteur</dt><dd>&lt; 500 ms</dd></div>
+              <div><dt>Délai d’affichage d’une mesure</dt><dd>1 à 2 s</dd></div>
+              <div><dt>Écart sur les compteurs, test contrôlé</dt><dd>&lt; 5 %</dd></div>
+              <div><dt>Perte de données après fermeture normale</dt><dd>aucune</dd></div>
+            </dl>
+            <p class="goals__note">Objectifs à valider sur des iPhone réels, dans des conditions réseau documentées.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Feuille de route ===== -->
+  <section class="section section--alt" id="feuille-de-route" aria-labelledby="h-route">
+    <div class="wrap">
+      <div class="section__head">
+        <p class="eyebrow">Feuille de route</p>
+        <h2 id="h-route">Le chemin jusqu’à l’App Store</h2>
+        <p>La V1 est en développement. Voici les étapes prévues, dans l’ordre.</p>
+      </div>
+      <ol class="steps">
+        <li><h3>Moteur réseau</h3><p>Mesure du débit, de la latence et de la connectivité, historique et statistiques.</p></li>
+        <li><h3>Application iPhone</h3><p>Tableau de bord, réseau, guide du partage, profils et historique en SwiftUI.</p></li>
+        <li><h3>Profils, simulation et automatisations</h3><p>Limites configurables, programmation, seuils et alertes.</p></li>
+        <li><h3>Qualité et confidentialité</h3><p>Tests sur iPhone réels en Wi-Fi, 4G et 5G, en arrière-plan et en mode économie d’énergie.</p></li>
+        <li><h3>Bêta TestFlight, puis App Store</h3><p>Une bêta ouverte aux premiers testeurs avant la publication.</p></li>
+      </ol>
+      <p class="steps__note">Aucune date n’est annoncée pour l’instant.</p>
+    </div>
+  </section>
+
+  <!-- ===== FAQ ===== -->
+  <section class="section" id="faq" aria-labelledby="h-faq">
+    <div class="wrap">
+      <div class="section__head">
+        <p class="eyebrow">Questions fréquentes</p>
+        <h2 id="h-faq">Ce qu’on nous demande en premier</h2>
+      </div>
+      <div class="faq">
+        <details>
+          <summary>FLUXA peut-il activer mon partage de connexion ?</summary>
+          <p>Non. Sur iPhone, seul l’utilisateur active le partage, dans Réglages. FLUXA ouvre les Réglages et vous guide, mais ne bascule pas l’interrupteur à votre place.</p>
+        </details>
+        <details>
+          <summary>Peut-il limiter le débit des appareils connectés à mon iPhone ?</summary>
+          <p>Non. iOS ne donne à aucune app le contrôle du trafic du partage de connexion. Vous pouvez configurer des plafonds et voir leur effet simulé sur votre débit mesuré. L’app affiche alors le statut « Simulé », jamais « Appliqué ».</p>
+        </details>
+        <details>
+          <summary>À quoi sert un profil s’il n’est pas appliqué au partage ?</summary>
+          <p>À préparer vos réglages, à comparer des scénarios sur votre débit réel et à déclencher des alertes ou des automatisations sur vos données locales. Si une fonction devient applicable, l’app le signale seulement après confirmation du système.</p>
+        </details>
+        <details>
+          <summary>Mes données quittent-elles mon iPhone ?</summary>
+          <p>Non. Il n’y a ni compte ni cloud dans la V1. Les mesures sont stockées dans une base locale, et vous pouvez tout effacer depuis les réglages de l’app.</p>
+        </details>
+        <details>
+          <summary>L’app mesure-t-elle en arrière-plan ?</summary>
+          <p>Les cadences annoncées valent quand l’app est au premier plan. iOS restreint l’exécution en arrière-plan, et la fréquence des mesures peut alors baisser.</p>
+        </details>
+        <details>
+          <summary>Faut-il installer un VPN ?</summary>
+          <p>Non. Le VPN local est facultatif et demande votre accord. Il traite uniquement le trafic de l’iPhone passé par le tunnel, pas celui des appareils reliés au partage.</p>
+        </details>
+        <details>
+          <summary>Est-ce un simple test de vitesse ?</summary>
+          <p>Non. Le test de débit est une fonction parmi d’autres. FLUXA réunit le suivi continu de la connexion, l’historique de consommation, les profils et le guide du partage.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Appel final ===== -->
+  <section class="cta section--alt" id="telecharger" aria-labelledby="h-cta">
+    <div class="wrap cta__inner">
+      <h2 id="h-cta">Bientôt sur l’App Store</h2>
+      <p>FLUXA arrive d’abord en bêta sur TestFlight, puis sur l’App Store. L’app est conçue pour iPhone et fonctionne sans compte.</p>
+      <div class="store" role="img" aria-label="Bientôt disponible sur l’App Store">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10"/><path d="m8 10 4 4 4-4"/><path d="M5 18h14"/></svg>
+        <span class="store__txt"><small>Bientôt sur</small><strong>l’App Store</strong></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- footer:start -->
+<footer class="footer" aria-label="Pied de page">
+  <div class="wrap">
+
+    <div class="footer__top">
+      <div class="footer__brand">
+        <a class="brand" href="#haut" aria-label="FLUXA, haut de page">
+          <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#171b2e"/><path d="M6 13c4 0 4-5 8-5s4 9 8 9 3-3 4-3" fill="none" stroke="#7cd4fd" stroke-width="2.4" stroke-linecap="round"/><path d="M6 22c3 0 4-3 7-3s4 4 7 4 4-2 6-2" fill="none" stroke="#ffb37a" stroke-width="2.4" stroke-linecap="round"/></svg>
+          <span class="brand__name">FLUXA</span>
+        </a>
+        <p>Le moniteur de connexion pour iPhone qui mesure à la seconde et n’annonce que ce que le système confirme.</p>
+        <ul class="footer__badges" aria-label="En bref">
+          <li class="pill pill--ok">Sans compte</li>
+          <li class="pill pill--ok">Sans cloud</li>
+          <li class="pill pill--ok">Stockage local</li>
+        </ul>
+      </div>
+      <div class="footer__get">
+        <div class="store" role="img" aria-label="Bientôt disponible sur l’App Store">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10"/><path d="m8 10 4 4 4-4"/><path d="M5 18h14"/></svg>
+          <span class="store__txt"><small>Bientôt sur</small><strong>l’App Store</strong></span>
+        </div>
+        <small>Bêta TestFlight avant la publication. Aucune date annoncée.</small>
+      </div>
+    </div>
+
+    <nav class="footer__cols" aria-label="Plan du site">
+      <details class="fcol" open>
+        <summary><h3>Application</h3></summary>
+        <ul>
+          <li><a href="#f-tableau">Tableau de bord</a></li>
+          <li><a href="#f-test">Test de débit</a></li>
+          <li><a href="#f-reseau">Mon réseau</a></li>
+          <li><a href="#f-partage">Partage de connexion</a></li>
+          <li><a href="#f-historique">Historique</a></li>
+          <li><a href="#f-automatisations">Automatisations</a></li>
+          <li><a href="#f-diagnostic">Centre de diagnostic</a></li>
+        </ul>
+      </details>
+      <details class="fcol" open>
+        <summary><h3>Profils et limites</h3></summary>
+        <ul>
+          <li><a href="#profils">Les sept profils</a></li>
+          <li><a href="#f-limiteur">Limiteur de débit</a></li>
+          <li><a href="#lab">Configuré ou appliqué</a></li>
+          <li><a href="#lab-effect">Simulation d’un plafond</a></li>
+        </ul>
+      </details>
+      <details class="fcol" open>
+        <summary><h3>Transparence</h3></summary>
+        <ul>
+          <li><a href="#transparence">Ce qu’iOS autorise</a></li>
+          <li><a href="#regle">La règle de l’app</a></li>
+          <li><a href="#capacites">Capacités sur iPhone</a></li>
+          <li><a href="#feuille-de-route">Feuille de route</a></li>
+        </ul>
+      </details>
+      <details class="fcol" open>
+        <summary><h3>Confidentialité</h3></summary>
+        <ul>
+          <li><a href="#confidentialite">Nos engagements</a></li>
+          <li><a href="#conservation">Durées de conservation</a></li>
+          <li><a href="#suppression">Effacer l’historique</a></li>
+          <li><a href="confidentialite.html">Politique de confidentialité</a></li>
+        </ul>
+      </details>
+      <details class="fcol" open>
+        <summary><h3>Technologie</h3></summary>
+        <ul>
+          <li><a href="#t-rust">Moteur Rust</a></li>
+          <li><a href="#t-swiftui">Interface SwiftUI</a></li>
+          <li><a href="#t-uniffi">Pont UniFFI</a></li>
+          <li><a href="#t-sqlite">Base locale SQLite</a></li>
+          <li><a href="#t-ios">Adaptateur iOS</a></li>
+        </ul>
+      </details>
+      <details class="fcol" open>
+        <summary><h3>Aide et ressources</h3></summary>
+        <ul>
+          <li><a href="#faq">Questions fréquentes</a></li>
+          <li><a href="https://support.apple.com/fr-fr/111785" target="_blank" rel="noopener">Partage de connexion, guide Apple</a></li>
+          <li><a href="https://developer.apple.com/documentation/networkextension" target="_blank" rel="noopener">Network Extension, Apple</a></li>
+          <li><a href="https://developer.apple.com/documentation/technotes/tn3120-expected-use-cases-for-network-extension-packet-tunnel-providers" target="_blank" rel="noopener">Note technique TN3120</a></li>
+          <li><a href="mentions-legales.html#contact">Contact</a></li>
+        </ul>
+      </details>
+    </nav>
+
+    <dl class="footer__specs" aria-label="Fiche de l’application">
+      <div><dt>Appareil</dt><dd>iPhone</dd></div>
+      <div><dt>Langue</dt><dd>Français</dd></div>
+      <div><dt>Compte</dt><dd>Aucun</dd></div>
+      <div><dt>Données</dt><dd>Sur l’appareil</dd></div>
+      <div><dt>Distribution</dt><dd>App Store</dd></div>
+      <div><dt>État</dt><dd>V1 en développement</dd></div>
+    </dl>
+
+    <div class="footer__notes">
+      <p><strong>Partage de connexion.</strong> FLUXA ne contrôle pas le partage de connexion d’iOS. Les plafonds de débit réglés dans l’app sont des profils et des simulations. Ils ne sont pas appliqués aux appareils reliés à votre iPhone.</p>
+      <p><strong>Données de démonstration.</strong> Les débits, latences et consommations affichés sur ce site sont fictifs et servent à illustrer l’interface. Les préréglages de profil sont des valeurs de départ, pas des débits garantis.</p>
+      <p><strong>Marques.</strong> Apple, iPhone, iOS, App Store, TestFlight, SwiftUI et Swift sont des marques d’Apple Inc., déposées aux États-Unis et dans d’autres pays. Rust est une marque de la Rust Foundation. FLUXA n’est ni affilié à Apple ni approuvé par Apple.</p>
+    </div>
+
+    <div class="footer__bottom">
+      <div>
+        <p>© <span data-year>2026</span> FLUXA. Tous droits réservés.</p>
+        <nav class="footer__legal" aria-label="Informations légales">
+          <a href="mentions-legales.html">Mentions légales</a>
+          <a href="confidentialite.html">Confidentialité</a>
+          <a href="mentions-legales.html#conditions">Conditions d’utilisation</a>
+          <a href="confidentialite.html#site">Cookies</a>
+        </nav>
+      </div>
+      <div class="footer__meta">
+        <span class="footer__lang">Français (France)</span>
+        <a class="top-link" href="#haut">Haut de page <span aria-hidden="true">↑</span></a>
+      </div>
+    </div>
+
+  </div>
+</footer>
+<!-- footer:end -->
+
+<script src="assets/site.js"></script>
+</body>
+</html>
