@@ -37,6 +37,8 @@ struct LimiterView: View {
 
     var body: some View {
         let policy = self.policy
+        // La simulation porte sur le débit du moment : l'écran la refait à chaque relevé.
+        let _ = model.snapshot
         let simulation = model.simulate(policy)
         let problem = model.problem(with: policy)
 

@@ -11,6 +11,7 @@ struct FluxaApp: App {
             RootView()
                 .environment(model)
                 .preferredColorScheme(.dark)
+                .environment(\.locale, Format.locale)
                 .tint(Theme.down)
                 // `start` ne fait rien si la mesure tourne déjà.
                 .task { model.start() }
