@@ -22,6 +22,10 @@ final class SpeedTestRunner {
 
     static let defaultServer = "https://speed.cloudflare.com"
 
+    /// Un test court (`-fluxaShortSpeedTest YES` au lancement) : les tests automatiques
+    /// vérifient le déroulement sans transférer des centaines de mégaoctets à chaque fois.
+    nonisolated static let isShort = UserDefaults.standard.bool(forKey: "fluxaShortSpeedTest")
+
     private(set) var phase = Phase.idle
     /// Le débit de la phase en cours, mis à jour pendant le transfert.
     private(set) var liveBps: Double?
@@ -111,9 +115,17 @@ final class SpeedTestRunner {
 
         /// Les connexions ouvertes en parallèle.
         var connections: Int { self == .download ? 4 : 3 }
-        var duration: TimeInterval { self == .download ? 8 : 6 }
+
+        var duration: TimeInterval {
+            if SpeedTestRunner.isShort { return self == .download ? 3 : 2 }
+            return self == .download ? 8 : 6
+        }
+
         /// Le volume au-delà duquel la phase s'arrête, pour borner la consommation.
-        var byteLimit: UInt64 { self == .download ? 200_000_000 : 60_000_000 }
+        var byteLimit: UInt64 {
+            if SpeedTestRunner.isShort { return self == .download ? 20_000_000 : 8_000_000 }
+            return self == .download ? 200_000_000 : 60_000_000
+        }
     }
 
     private func transfer(_ direction: Direction, base: URL) async -> (bps: Double?, bytes: UInt64) {
@@ -165,7 +177,7 @@ final class SpeedTestRunner {
         }
         counter.onSuccess = nil
         transferredBytes += meter.totalBytes
-        return (meter.bps, meter.totalBytes)
+        return (meter.finalBps, meter.totalBytes)
     }
 
     /// L'adresse d'un point d'entrée du serveur de test.

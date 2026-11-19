@@ -186,6 +186,26 @@ final class SpeedMeterTests: XCTestCase {
         XCTAssertEqual(meter.bps(at: 2) ?? 0, 4_000_000, accuracy: 1)
     }
 
+    func testAPhaseCutShortStillGivesAFigure() {
+        // Une connexion très rapide : 200 Mo en une seconde, avant la fin de l'amorçage.
+        var meter = SpeedMeter(warmUp: 1.5)
+        for tick in 1...5 {
+            meter.add(bytes: 40_000_000, at: Double(tick) * 0.2)
+        }
+        XCTAssertNil(meter.bps, "rien n'est mesuré après l'amorçage")
+        XCTAssertEqual(meter.finalBps ?? 0, 1_600_000_000, accuracy: 1)
+
+        // Quand l'amorçage est passé, le débit final est le débit mesuré.
+        var long = SpeedMeter(warmUp: 1)
+        long.add(bytes: 100_000, at: 1)
+        long.add(bytes: 1_000_000, at: 2)
+        long.add(bytes: 1_000_000, at: 3)
+        XCTAssertEqual(long.finalBps, long.bps)
+
+        // Sans transfert, toujours pas de chiffre.
+        XCTAssertNil(SpeedMeter().finalBps)
+    }
+
     func testInvalidInputsAreIgnored() {
         var meter = SpeedMeter(warmUp: 0)
         meter.add(bytes: -5, at: 1)
