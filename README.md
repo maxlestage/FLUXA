@@ -27,8 +27,8 @@ brew install xcodegen
 cd ios && xcodegen generate && open Fluxa.xcodeproj
 ```
 
-iOS 17 au minimum. L'identifiant `app.fluxa.ios` de `project.yml` est provisoire : remplacez-le
-par celui de votre compte développeur avant de signer.
+iOS 17 au minimum. [`ios/README.md`](ios/README.md) explique comment installer l'app sur un iPhone
+(signature dans `ios/Config/`) et comment l'envoyer sur TestFlight.
 
 Le test de débit échange des données de test avec `speed.cloudflare.com` par défaut ; l'adresse se
 règle dans l'app (un serveur compatible offre `GET /__down?bytes=N` et `POST /__up`). L'état du

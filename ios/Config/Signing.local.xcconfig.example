@@ -1,0 +1,9 @@
+// Copiez ce fichier en Signing.local.xcconfig (ignoré par git), puis lancez
+// `xcodegen generate`.
+
+// L'identifiant de votre équipe : dix caractères, visibles sur
+// developer.apple.com → Account → Membership details.
+DEVELOPMENT_TEAM = ABCDE12345
+
+// Un identifiant d'app à vous, par exemple le nom de domaine inversé de votre site.
+FLUXA_BUNDLE_ID = fr.exemple.fluxa

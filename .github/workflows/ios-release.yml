@@ -1,0 +1,94 @@
+# Envoie une version de l'app sur TestFlight. Démarrage à la main uniquement :
+# Actions → iOS release → Run workflow.
+#
+# Ce workflow n'a jamais tourné : il demande un compte développeur Apple, que le dépôt
+# n'a pas encore. Avant le premier lancement :
+#   1. créer l'app dans App Store Connect, avec l'identifiant choisi ;
+#   2. créer une clé d'API App Store Connect (Utilisateurs et accès → Intégrations →
+#      API App Store Connect), avec le rôle « Gestionnaire d'apps » ;
+#   3. régler, dans GitHub → Settings → Secrets and variables → Actions :
+#        - secret   ASC_KEY_ID        l'identifiant de la clé
+#        - secret   ASC_ISSUER_ID     l'identifiant de l'émetteur
+#        - secret   ASC_PRIVATE_KEY   le contenu du fichier .p8
+#        - variable APPLE_TEAM_ID     l'identifiant de l'équipe (dix caractères)
+#        - variable IOS_BUNDLE_ID     l'identifiant de l'app
+# Sans eux, le workflow s'arrête en le disant.
+
+name: iOS release
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    name: TestFlight
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+      TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the configuration
+        id: config
+        run: |
+          missing=""
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY TEAM_ID BUNDLE_ID; do
+            if [ -z "${!name:-}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::notice::TestFlight n'est pas configuré. Il manque :$missing (voir l'en-tête de ce workflow)."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install XcodeGen
+        if: steps.config.outputs.ready == 'true'
+        run: brew install xcodegen
+      - name: Generate the Xcode project
+        if: steps.config.outputs.ready == 'true'
+        working-directory: ios
+        run: xcodegen generate
+      - name: Archive
+        if: steps.config.outputs.ready == 'true'
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$key"
+          echo "KEY_PATH=$key" >> "$GITHUB_ENV"
+          # Le numéro de build suit celui du workflow : il augmente à chaque envoi.
+          xcodebuild archive \
+            -project Fluxa.xcodeproj -scheme Fluxa -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Fluxa.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$key" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            FLUXA_BUNDLE_ID="$BUNDLE_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
+      - name: Upload to TestFlight
+        if: steps.config.outputs.ready == 'true'
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Fluxa.xcarchive" \
+            -exportOptionsPlist Config/ExportOptions.plist \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP"/AuthKey_*.p8

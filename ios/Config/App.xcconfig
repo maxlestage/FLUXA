@@ -1,0 +1,15 @@
+// L'identité de l'app et sa signature.
+//
+// Pour installer l'app sur un iPhone, copiez Signing.local.xcconfig.example en
+// Signing.local.xcconfig et renseignez-y votre équipe et votre identifiant. Ce fichier
+// local n'est pas dans le dépôt.
+
+// L'identifiant de l'app. Provisoire : il doit être unique et vous appartenir.
+FLUXA_BUNDLE_ID = app.fluxa.ios
+
+// L'équipe du compte développeur Apple. Vide : Xcode ne signe que pour le simulateur.
+DEVELOPMENT_TEAM =
+
+CODE_SIGN_STYLE = Automatic
+
+#include? "Signing.local.xcconfig"
