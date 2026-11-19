@@ -112,9 +112,10 @@ final class AppModel {
     }
 
     private func probeLatency() {
-        guard !probing, path.isOnline else { return }
+        // Sans hôte, pas de sonde : une absence de réglage n'est pas une perte de paquets.
+        let host = latencyHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !probing, path.isOnline, !host.isEmpty else { return }
         probing = true
-        let host = latencyHost
         Task { [weak self] in
             let milliseconds = await LatencyProbe.measure(host: host)
             guard let self else { return }
