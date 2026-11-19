@@ -97,3 +97,105 @@ async fn lists_its_pages_for_search_engines() {
     let robots = client.get("/robots.txt").await.text();
     assert!(robots.contains("Sitemap: https://fluxa.example/sitemap.xml"));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn every_page_carries_the_share_card() {
+    let client = client().await;
+    for path in fluxa_site::routes::PAGES {
+        let html = client.get(path).await.text();
+        assert!(
+            html.contains(
+                r#"<meta property="og:image" content="https://fluxa.example/og-image.png"/>"#
+            ),
+            "{path}"
+        );
+        assert!(html.contains(r#"<meta name="twitter:card" content="summary_large_image"/>"#));
+        assert!(html.contains(r#"<meta property="og:image:width" content="1200"/>"#));
+        assert!(html.contains(r#"<meta property="og:image:height" content="630"/>"#));
+        assert!(html.contains(r#"<meta property="og:image:alt""#));
+    }
+    // L'image existe, aux dimensions annoncées (l'en-tête d'un PNG les donne).
+    let png = std::fs::read("public/og-image.png").expect("public/og-image.png");
+    assert_eq!(&png[1..4], b"PNG");
+    let size = |at: usize| u32::from_be_bytes(png[at..at + 4].try_into().unwrap());
+    assert_eq!((size(16), size(20)), (1200, 630));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_share_card_page_stays_out_of_the_site() {
+    let client = client().await;
+    let response = client.get(fluxa_site::routes::SHARE_CARD).await;
+    assert_eq!(response.status(), 200);
+    let html = response.text();
+    assert!(html.contains("noindex"));
+    assert!(html.contains("42,8") && html.contains("<polyline"));
+    let sitemap = client.get("/sitemap.xml").await.text();
+    assert!(!sitemap.contains("carte-de-partage"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_site_is_an_installable_app() {
+    let client = client().await;
+    let html = client.get("/").await.text();
+    assert!(html.contains(r#"<link rel="manifest" href="/manifest.webmanifest"/>"#));
+    assert!(html.contains(r#"<link rel="apple-touch-icon" href="/icons/icon-512.png"/>"#));
+    assert!(html.contains(r##"<meta name="theme-color" content="#090b14"/>"##));
+    assert!(html.contains("serviceWorker"));
+
+    let response = client.get("/manifest.webmanifest").await;
+    assert_eq!(response.status(), 200);
+    let manifest: paquets::serde_json::Value = response.json();
+    assert_eq!(manifest["name"], "FLUXA");
+    assert_eq!(manifest["start_url"], "/");
+    assert_eq!(manifest["scope"], "/");
+    assert_eq!(manifest["display"], "standalone");
+    assert_eq!(manifest["lang"], "fr");
+    let icons = manifest["icons"].as_array().unwrap();
+    assert_eq!(icons.len(), 3);
+    assert!(icons.iter().any(|icon| icon["purpose"] == "maskable"));
+    for icon in icons {
+        // Chaque icône du manifeste est un fichier du site, à la taille annoncée.
+        let src = icon["src"].as_str().unwrap();
+        let png = std::fs::read(format!("public{src}")).unwrap_or_else(|_| panic!("{src} manque"));
+        let width = u32::from_be_bytes(png[16..20].try_into().unwrap());
+        assert_eq!(icon["sizes"], format!("{width}x{width}"), "{src}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_service_worker_keeps_the_site_for_offline() {
+    let client = client().await;
+    let worker = client.get("/sw.js").await.text();
+    // La page d'accueil et les icônes sont gardées à l'installation ; hors ligne, une
+    // adresse inconnue retombe sur l'accueil.
+    assert!(worker.contains(r#"const OFFLINE = "/";"#));
+    for url in [
+        "\"/\"",
+        "/icons/icon-192.png",
+        "/icons/icon-maskable-512.png",
+    ] {
+        assert!(worker.contains(url), "{url}");
+    }
+    // Le reste est listé par chaque page : le navigateur le redemande une fois le
+    // service worker aux commandes.
+    let html = client.get("/confidentialite/").await.text();
+    let list = html
+        .split(r#"<meta name="fluxa-offline" content=""#)
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .expect("la liste hors ligne");
+    let urls: Vec<&str> = list.split_whitespace().collect();
+    for expected in [
+        "/",
+        "/confidentialite/",
+        "/mentions-legales/",
+        "/fonts/jetbrains-mono.woff2",
+    ] {
+        assert!(urls.contains(&expected), "{expected}");
+    }
+    assert!(urls.iter().any(|url| url.starts_with("/site.css?v=")));
+    for url in urls {
+        let path = url.split('?').next().unwrap();
+        assert_eq!(client.get(path).await.status(), 200, "{url}");
+    }
+}

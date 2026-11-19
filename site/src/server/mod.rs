@@ -12,7 +12,9 @@ use std::sync::Arc;
 use paquets::prelude::*;
 use paquets::securite::https::HttpsRedirect;
 
-use crate::routes::{self, HOME, LEGAL, PRIVACY, base, link};
+use crate::routes::{
+    self, HOME, ICON_192, ICON_512, ICON_MASKABLE, LEGAL, PRIVACY, SHARE_CARD, base, link,
+};
 
 pub struct Site {
     /// L'adresse publique, sous-chemin compris (`SITE_URL`) ; `None` : celle de chaque
@@ -76,6 +78,11 @@ impl Site {
         }
     }
 
+    /// L'adresse de la feuille de style, avec son empreinte : elle change avec le fichier.
+    pub fn stylesheet(&self) -> String {
+        format!("{}?v={}", link("/site.css"), self.css_version)
+    }
+
     /// L'adresse publique du site, sous-chemin compris, sans barre finale.
     fn origin(&self, req: &Request) -> String {
         if let Some(url) = &self.site_url {
@@ -107,11 +114,32 @@ impl Site {
 /// Une page du site : son chemin et la fonction qui la rend.
 type Render = fn(&pages::Ctx) -> Page;
 
-const ROUTES: [(&str, Render); 3] = [
+const ROUTES: [(&str, Render); 4] = [
     (HOME, pages::home),
     (PRIVACY, pages::privacy),
     (LEGAL, pages::legal),
+    (SHARE_CARD, pages::share_card),
 ];
+
+/// Le manifeste de l'application installable. Ses adresses passent par le sous-chemin du
+/// site : le même code sert Heroku (`/`) et GitHub Pages (`/FLUXA/`).
+fn manifest() -> Pwa {
+    Pwa::new("FLUXA")
+        .short_name("FLUXA")
+        .description("Le site de FLUXA, le moniteur de connexion pour iPhone : fonctions, profils, transparence et confidentialité. Lisible hors ligne.")
+        .id(link(HOME))
+        .start_url(link(HOME))
+        .scope(link(HOME))
+        .display("standalone")
+        .orientation("portrait")
+        .lang("fr")
+        .theme_color("#090b14")
+        .background_color("#090b14")
+        .categories(["utilities", "productivity"])
+        .icon(link(ICON_192), "192x192", "image/png")
+        .icon(link(ICON_512), "512x512", "image/png")
+        .maskable_icon(link(ICON_MASKABLE), "512x512", "image/png")
+}
 
 fn render(site: &Site, req: &Request, path: &'static str, page: Render) -> Response {
     // Une seule adresse par page : `/confidentialite` mène à `/confidentialite/`.
@@ -195,6 +223,9 @@ pub fn app(site: Arc<Site>) -> App {
             async move { handler(&site, &req) }
         });
     }
+    // Installable sur téléphone et ordinateur, lisible hors ligne : Paquets sert le
+    // manifeste (`/manifest.webmanifest`) et le service worker (`/sw.js`).
+    app.pwa(manifest());
     let fallback = site.clone();
     app.fallback(move |req: Request| {
         let site = fallback.clone();
