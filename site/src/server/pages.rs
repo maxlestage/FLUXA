@@ -526,8 +526,8 @@ fn privacy_section() -> Element {
                                             "FLUXA n’en a pas besoin et n’y accède pas.",
                                         ))
                                         .child(commitment(
-                                            "Aucun envoi automatique vers un serveur",
-                                            "Il n’y a pas de cloud dans la V1.",
+                                            "Aucune statistique envoyée à un serveur",
+                                            "Il n’y a ni compte ni cloud. Vos mesures ne sont transmises à personne.",
                                         )),
                                 )
                                 .child(
@@ -1115,7 +1115,7 @@ pub fn privacy(ctx: &Ctx) -> Page {
             Block::List(&[
                 "FLUXA fonctionne <strong>sans compte</strong> et <strong>sans serveur</strong>.",
                 "Les mesures et les réglages sont enregistrés <strong>sur votre iPhone</strong>.",
-                "Aucune statistique n’est envoyée automatiquement à qui que ce soit.",
+                "Aucune mesure n’est envoyée à qui que ce soit.",
                 "Vous pouvez effacer tout l’historique depuis les réglages de l’app.",
             ]),
             Block::Title("donnees", "Données traitées par l’application"),
@@ -1138,6 +1138,13 @@ pub fn privacy(ctx: &Ctx) -> Page {
                 "Vos mots de passe Wi-Fi.",
                 "Des identifiants d’appareils qu’iOS ne fournit pas. Une information inconnue reste marquée comme inconnue.",
             ]),
+            Block::Title("reseau", "Ce que l’app échange sur le réseau"),
+            Block::Text("Pour mesurer, l’app a besoin de deux échanges, et seulement de ceux-là :"),
+            Block::List(&[
+                "<strong>La sonde de latence.</strong> Quand l’app est ouverte, elle ouvre toutes les cinq secondes une connexion vers un hôte (www.apple.com par défaut, modifiable dans les réglages) et en mesure le délai. Aucune donnée n’y est envoyée ; l’hôte voit votre adresse IP, comme tout site que vous visitez.",
+                "<strong>Le test de débit.</strong> Il ne part que lorsque vous le lancez. Il télécharge et envoie des données de test sans contenu, avec un serveur de test (speed.cloudflare.com par défaut, modifiable dans les réglages), qui voit votre adresse IP.",
+            ]),
+            Block::Text("Les mesures qui en résultent restent sur l’iPhone."),
             Block::Title("conservation", "Durées de conservation"),
             Block::List(&[
                 "Mesures détaillées : <strong>7 jours</strong>.",
