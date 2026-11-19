@@ -34,10 +34,18 @@ struct FluxaApp: App {
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var tab = Launch.tab
+    /// L'accueil ne s'affiche qu'au premier lancement.
+    @State private var showsWelcome = !UserDefaults.standard.bool(forKey: Launch.welcomeKey)
 
     var body: some View {
         @Bindable var model = model
         content
+            .fullScreenCover(isPresented: $showsWelcome) {
+                WelcomeView {
+                    UserDefaults.standard.set(true, forKey: Launch.welcomeKey)
+                    showsWelcome = false
+                }
+            }
             .alert(
                 "Action impossible",
                 isPresented: Binding(
@@ -64,6 +72,8 @@ struct RootView: View {
             NavigationStack { SpeedTestView() }
         case "automatisations":
             NavigationStack { AutomationsView() }
+        case "appareils":
+            NavigationStack { DevicesView() }
         default:
             tabs
         }
@@ -105,6 +115,9 @@ enum Launch {
     static var tab: AppTab {
         UserDefaults.standard.string(forKey: "fluxaTab").flatMap(AppTab.init(rawValue:)) ?? .dashboard
     }
+
+    /// Vrai une fois l'accueil du premier lancement passé (`-hasSeenWelcome YES` le saute).
+    static let welcomeKey = "hasSeenWelcome"
 
     static var screen: String? {
         UserDefaults.standard.string(forKey: "fluxaScreen")

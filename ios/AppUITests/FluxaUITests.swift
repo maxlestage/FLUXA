@@ -9,8 +9,9 @@ final class FluxaUITests: XCTestCase {
         app = XCUIApplication()
     }
 
-    private func launch(_ arguments: [String] = []) {
-        app.launchArguments = arguments
+    /// Lance l'app. L'accueil du premier lancement est passé, sauf si le test le demande.
+    private func launch(_ arguments: [String] = [], welcome: Bool = false) {
+        app.launchArguments = arguments + ["-hasSeenWelcome", welcome ? "NO" : "YES"]
         app.launch()
     }
 
@@ -66,6 +67,18 @@ final class FluxaUITests: XCTestCase {
             file: file,
             line: line
         )
+    }
+
+    // MARK: Premier lancement
+
+    func testTheFirstLaunchExplainsTheAppBeforeAnythingElse() {
+        launch(welcome: true)
+        XCTAssertTrue(element(containing: "FLUXA mesure, et dit ce qui est réellement appliqué.").waitForExistence(timeout: 30))
+        XCTAssertTrue(element(containing: "Ce qu’iOS garde pour lui").exists)
+        XCTAssertTrue(element(containing: "Vos mesures restent sur l’iPhone").exists)
+        app.buttons["Commencer"].tap()
+        XCTAssertTrue(waitForDisappearance(of: element(containing: "Ce qu’iOS garde pour lui"), timeout: 10))
+        XCTAssertTrue(app.navigationBars["Tableau de bord"].waitForExistence(timeout: 10))
     }
 
     // MARK: Tableau de bord
@@ -188,6 +201,35 @@ final class FluxaUITests: XCTestCase {
         XCTAssertFalse(hasElement(labelled: "Appliqué"))
     }
 
+    // MARK: Appareils
+
+    func testADeviceCanBeNoted() {
+        launch(["-fluxaScreen", "appareils"])
+        XCTAssertTrue(app.navigationBars["Mes appareils"].waitForExistence(timeout: 30))
+        // L'app dit ce qu'iOS ne fournit pas, au lieu de l'inventer.
+        XCTAssertTrue(element(containing: "Adresse MAC").exists)
+        app.navigationBars["Mes appareils"].buttons["Nouvel appareil"].tap()
+        let name = app.textFields["Nom de l’appareil"]
+        XCTAssertTrue(name.waitForExistence(timeout: 10))
+        name.tap()
+        name.typeText("MacBook")
+        app.navigationBars.buttons["Enregistrer"].tap()
+        XCTAssertFalse(app.descendants(matching: .any)["erreur-appareil"].waitForExistence(timeout: 2))
+        XCTAssertTrue(button(containing: "MacBook").waitForExistence(timeout: 5))
+        XCTAssertTrue(element(containing: "aucun profil").exists)
+    }
+
+    func testADeviceWithoutNameIsRefused() {
+        launch(["-fluxaScreen", "appareils"])
+        XCTAssertTrue(app.navigationBars["Mes appareils"].waitForExistence(timeout: 30))
+        app.navigationBars["Mes appareils"].buttons["Nouvel appareil"].tap()
+        XCTAssertTrue(app.textFields["Nom de l’appareil"].waitForExistence(timeout: 10))
+        app.navigationBars.buttons["Enregistrer"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["erreur-appareil"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["Annuler"].tap()
+        assertNoError()
+    }
+
     // MARK: Test de débit
 
     func testTheSpeedTestMeasuresBothDirections() {
@@ -261,6 +303,9 @@ final class FluxaUITests: XCTestCase {
         launch(["-fluxaTab", "historique"])
         XCTAssertTrue(app.navigationBars["Historique"].waitForExistence(timeout: 30))
         XCTAssertTrue(scroll(to: element(containing: "Reçu")))
+        // La comparaison avec la période précédente et l'export sont là.
+        XCTAssertTrue(scroll(to: app.descendants(matching: .any)["comparaison"]))
+        XCTAssertTrue(app.navigationBars.buttons["Exporter"].exists)
         app.swipeDown()
         app.swipeDown()
         for period in ["24 heures", "30 jours", "1 heure"] {

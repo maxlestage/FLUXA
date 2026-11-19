@@ -102,12 +102,12 @@ jobs:
           xcrun simctl install "$DEVICE" build/Build/Products/Debug-iphonesimulator/Fluxa.app
           mkdir -p screenshots
           # Le tableau de bord, assez longtemps pour qu'une minute entre dans l'historique.
-          xcrun simctl launch "$DEVICE" app.fluxa.ios
+          xcrun simctl launch "$DEVICE" app.fluxa.ios -hasSeenWelcome YES
           sleep 75
           xcrun simctl io "$DEVICE" screenshot screenshots/1-tableau-de-bord.png
           shot() {
             xcrun simctl terminate "$DEVICE" app.fluxa.ios || true
-            xcrun simctl launch "$DEVICE" app.fluxa.ios "$2" "$3"
+            xcrun simctl launch "$DEVICE" app.fluxa.ios -hasSeenWelcome "${4:-YES}" "$2" "$3"
             sleep 6
             xcrun simctl io "$DEVICE" screenshot "screenshots/$1.png"
           }
@@ -120,6 +120,8 @@ jobs:
           shot 8-diagnostic -fluxaScreen diagnostic
           shot 9-test-de-debit -fluxaScreen test
           shot 10-automatisations -fluxaScreen automatisations
+          shot 11-appareils -fluxaScreen appareils
+          shot 12-accueil -fluxaTab reseau NO
       - uses: actions/upload-artifact@v4
         if: always()
         with:
