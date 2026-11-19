@@ -74,6 +74,8 @@ struct RootView: View {
             NavigationStack { AutomationsView() }
         case "appareils":
             NavigationStack { DevicesView() }
+        case "forfait":
+            NavigationStack { PlanView() }
         default:
             tabs
         }
@@ -109,7 +111,8 @@ enum AppTab: String {
 }
 
 /// Les arguments de lancement, pour ouvrir l'app sur un écran précis :
-/// `-fluxaTab profils`, ou `-fluxaScreen limiteur` pour un écran intérieur.
+/// `-fluxaTab profils`, ou `-fluxaScreen limiteur` pour un écran intérieur
+/// (`reseau`, `limiteur`, `diagnostic`, `test`, `automatisations`, `appareils`, `forfait`).
 /// Le workflow s'en sert pour ses captures d'écran.
 enum Launch {
     static var tab: AppTab {
@@ -122,4 +125,11 @@ enum Launch {
     static var screen: String? {
         UserDefaults.standard.string(forKey: "fluxaScreen")
     }
+
+    /// La durée à partir de laquelle une absence est signalée au retour dans l'app, en
+    /// secondes : une minute, ou la valeur de `-fluxaAbsenceMinimum` pour les tests.
+    static let absenceMinimum: TimeInterval = {
+        let custom = UserDefaults.standard.double(forKey: "fluxaAbsenceMinimum")
+        return custom > 0 ? custom : 60
+    }()
 }

@@ -34,6 +34,7 @@ extension InterfaceClass {
         case .cellular: "Réseau mobile"
         case .wired: "Ethernet"
         case .other: "Autre"
+        case .sharing: "Partage de connexion"
         }
     }
 }

@@ -12,6 +12,20 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
+                    NavigationLink {
+                        PlanView()
+                    } label: {
+                        LabeledContent {
+                            Text(model.plan.map { Format.gigabytes($0.plan.allowanceBytes) } ?? "Non réglé")
+                                .font(.body.monospacedDigit())
+                        } label: {
+                            Label("Forfait mobile", systemImage: "simcard")
+                        }
+                    }
+                    .accessibilityIdentifier("reglage-forfait")
+                }
+
+                Section {
                     LabeledContent("Hôte de la sonde") {
                         TextField(AppModel.defaultLatencyHost, text: $model.latencyHost)
                             .multilineTextAlignment(.trailing)
@@ -22,7 +36,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Latence")
                 } footer: {
-                    Text("Toutes les cinq secondes, FLUXA ouvre une connexion vers cet hôte et en mesure le délai. Avec le test de débit, que vous lancez vous-même, c’est le seul échange réseau de l’app.")
+                    Text("Toutes les cinq secondes, FLUXA ouvre une connexion vers cet hôte et en mesure le délai ; moins souvent en mode économie d’énergie ou données réduites. Avec le test de débit, que vous lancez vous-même, c’est le seul échange réseau de l’app.")
                 }
 
                 Section {
@@ -41,7 +55,7 @@ struct SettingsView: View {
 
                 Section {
                     ValueRow("Débit", "chaque seconde")
-                    ValueRow("Latence et gigue", "toutes les 5 s")
+                    ValueRow("Latence et gigue", Self.probeCadence(model.probeInterval))
                     ValueRow("Historique", "chaque minute")
                 } header: {
                     Text("Cadences")
@@ -72,7 +86,7 @@ struct SettingsView: View {
                             model.eraseHistory()
                         }
                     } message: {
-                        Text("Vos profils sont conservés.")
+                        Text("Vos profils et votre forfait sont conservés.")
                     }
 
                     Button("Tout effacer", role: .destructive) {
@@ -87,7 +101,7 @@ struct SettingsView: View {
                             model.eraseAll()
                         }
                     } message: {
-                        Text("Les mesures, le journal, les profils créés et les réglages sont supprimés.")
+                        Text("Les mesures, le journal, les profils créés, le forfait et les réglages sont supprimés.")
                     }
                 }
 
@@ -106,6 +120,16 @@ struct SettingsView: View {
             }
             .fluxaBackground()
             .navigationTitle("Réglages")
+        }
+    }
+
+    /// « toutes les 5 s », avec le mode du système qui ralentit la sonde.
+    static func probeCadence(_ interval: Int) -> String {
+        let cadence = "toutes les \(interval) s"
+        switch interval {
+        case AppModel.probeIntervals.lowData: return cadence + " (données réduites)"
+        case AppModel.probeIntervals.lowPower: return cadence + " (économie d’énergie)"
+        default: return cadence
         }
     }
 

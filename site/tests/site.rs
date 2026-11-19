@@ -29,8 +29,8 @@ async fn serves_the_home_page() {
         );
     }
     assert!(html.contains("42,8"));
-    // Neuf fonctions, chacune avec son ancre, et un pied de page complet.
-    assert_eq!(html.matches(r#"class="feat""#).count(), 9);
+    // Douze fonctions, chacune avec son ancre, et un pied de page complet.
+    assert_eq!(html.matches(r#"class="feat""#).count(), 12);
     assert_eq!(html.matches(r#"class="fcol""#).count(), 6);
     // iOS seulement.
     assert!(!html.to_lowercase().contains("android"));

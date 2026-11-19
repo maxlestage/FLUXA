@@ -71,6 +71,35 @@ enum Format {
         return "\(seconds / 3_600)" + space + "h"
     }
 
+    /// Un volume en gigaoctets, pour un forfait : « 50 Go », « 12,5 Go ».
+    static func gigabytes(_ value: UInt64) -> String {
+        let gigabytes = Double(value) / 1_000_000_000
+        let digits = gigabytes == gigabytes.rounded() ? 0 : (gigabytes >= 10 ? 1 : 2)
+        return number(gigabytes, digits: digits) + space + "Go"
+    }
+
+    /// Une durée écoulée : « 45 s », « 12 min », « 2 h 05 », « 3 j 4 h ».
+    static func span(_ interval: TimeInterval) -> String {
+        let seconds = Int(max(0, interval).rounded())
+        if seconds < 60 {
+            return "\(seconds)" + space + "s"
+        }
+        let minutes = seconds / 60
+        if minutes < 60 {
+            return "\(minutes)" + space + "min"
+        }
+        let hours = minutes / 60
+        if hours < 24 {
+            return "\(hours)" + space + "h" + space + String(format: "%02d", minutes % 60)
+        }
+        return "\(hours / 24)" + space + "j" + space + "\(hours % 24)" + space + "h"
+    }
+
+    /// Un jour, sans l'heure : « 24 nov. ».
+    static func day(_ date: Date) -> String {
+        date.formatted(.dateTime.day().month(.abbreviated).locale(locale))
+    }
+
     static func dateTime(_ date: Date) -> String {
         date.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(locale))
     }

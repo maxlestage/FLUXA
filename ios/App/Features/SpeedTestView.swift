@@ -4,6 +4,7 @@ import SwiftUI
 /// Le test de débit : une mesure à la demande, et la liste des mesures précédentes.
 struct SpeedTestView: View {
     @Environment(AppModel.self) private var model
+    @State private var confirmsMeteredTest = false
 
     var body: some View {
         let runner = model.speedTest
@@ -56,11 +57,27 @@ struct SpeedTestView: View {
                     }
                 } else {
                     Button {
-                        model.startSpeedTest()
+                        // Sur un réseau facturé à l'usage, le volume du test se confirme.
+                        if model.path.isExpensive {
+                            confirmsMeteredTest = true
+                        } else {
+                            model.startSpeedTest()
+                        }
                     } label: {
                         Label("Lancer le test", systemImage: "play.fill")
                     }
                     .disabled(!model.path.isOnline)
+                    .confirmationDialog(
+                        "Lancer le test sur ce réseau ?",
+                        isPresented: $confirmsMeteredTest,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Lancer le test") {
+                            model.startSpeedTest()
+                        }
+                    } message: {
+                        Text(Self.meteredWarning(remaining: model.plan?.remainingBytes))
+                    }
                 }
             } footer: {
                 Text(warning)
@@ -91,6 +108,15 @@ struct SpeedTestView: View {
         .fluxaBackground()
         .navigationTitle("Test de débit")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// Ce que coûte un test sur un réseau facturé à l'usage, et ce qu'il reste du forfait.
+    static func meteredWarning(remaining: UInt64?) -> String {
+        var text = "Ce réseau est facturé à l’usage : le test peut consommer jusqu’à 260 Mo de votre forfait."
+        if let remaining {
+            text += " Il vous reste \(Format.bytes(remaining)) d’après FLUXA."
+        }
+        return text
     }
 
     private func title(for phase: SpeedTestRunner.Phase) -> String {

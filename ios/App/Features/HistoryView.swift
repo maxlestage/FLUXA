@@ -55,6 +55,9 @@ struct HistoryView: View {
         let aggregates = model.history(from: start, to: now, step: period.step)
         let comparison = model.compareUsage(from: start, to: now)
         let usage = comparison.current
+        // Le volume par réseau est gardé à l'heure et au jour : pas de détail sur une heure.
+        let networks = period == .hour ? [] : model.usageByNetwork(from: start, to: now)
+        let absences = Array(model.absences(limit: 50).filter { $0.end >= start }.prefix(5))
 
         NavigationStack {
             ScrollView {
@@ -113,6 +116,50 @@ struct HistoryView: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("comparaison")
 
+                    if !networks.isEmpty {
+                        Card {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Eyebrow("Par réseau")
+                                ForEach(networks) { network in
+                                    NetworkShare(usage: network, largest: networks.first?.totalBytes ?? 0)
+                                }
+                                if networks.contains(where: { $0.outsideAppBytes > 0 }) {
+                                    Text("« Hors de l’app » : rattrapé d’après les compteurs du système à votre retour. C’est un minimum.")
+                                        .font(.footnote)
+                                        .foregroundStyle(Theme.tertiary)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("par-reseau")
+                    }
+
+                    if !absences.isEmpty {
+                        Card {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Eyebrow("Hors de l’app")
+                                ForEach(absences) { absence in
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        HStack(alignment: .firstTextBaseline) {
+                                            Text(Format.dateTime(absence.end))
+                                            Spacer()
+                                            Text(Format.span(absence.duration))
+                                                .font(.callout.monospacedDigit())
+                                                .foregroundStyle(Theme.tertiary)
+                                        }
+                                        Text(PlanText.atLeast(absence.totalBytes))
+                                            .font(.subheadline.monospacedDigit())
+                                            .foregroundStyle(Theme.secondary)
+                                    }
+                                    .accessibilityElement(children: .combine)
+                                }
+                                Text("Ce que les compteurs du système ont vu passer pendant que FLUXA ne mesurait pas, relevé à chaque retour.")
+                                    .font(.footnote)
+                                    .foregroundStyle(Theme.tertiary)
+                            }
+                        }
+                        .accessibilityIdentifier("absences")
+                    }
+
                     Text("Conservation : 7 jours pour les minutes, 30 jours pour les heures, 12 mois pour les jours.")
                         .font(.footnote)
                         .foregroundStyle(Theme.tertiary)
@@ -157,6 +204,20 @@ struct HistoryView: View {
         return "\(Format.bytes(now)) sur cette période, \(Format.bytes(before)) sur la précédente."
     }
 
+    /// La part d'un volume dans le plus gros, entre 0 et 1.
+    static func share(_ bytes: UInt64, of largest: UInt64) -> Double {
+        largest == 0 ? 0 : min(1, Double(bytes) / Double(largest))
+    }
+
+    /// « ↓ 1,20 Go · ↑ 80,0 Mo », et la part rattrapée hors de l'app s'il y en a une.
+    static func detail(_ usage: NetworkUsage) -> String {
+        var text = "↓ \(Format.bytes(usage.receivedBytes)) · ↑ \(Format.bytes(usage.sentBytes))"
+        if usage.outsideAppBytes > 0 {
+            text += " · dont au moins \(Format.bytes(usage.outsideAppBytes)) hors de l’app"
+        }
+        return text
+    }
+
     private func chart(_ aggregates: [Aggregate]) -> some View {
         Chart {
             ForEach(aggregates) { aggregate in
@@ -185,6 +246,29 @@ struct HistoryView: View {
         }
         .frame(height: 200)
         .accessibilityLabel("Débit moyen descendant et montant sur la période")
+    }
+}
+
+/// Le volume d'un réseau sur la période, avec une barre à l'échelle du plus gros.
+private struct NetworkShare: View {
+    let usage: NetworkUsage
+    let largest: UInt64
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(usage.kind.title)
+                Spacer()
+                Text(Format.bytes(usage.totalBytes))
+                    .font(.body.monospacedDigit())
+            }
+            ProgressView(value: HistoryView.share(usage.totalBytes, of: largest))
+                .tint(usage.kind == .cellular ? Theme.up : Theme.down)
+            Text(HistoryView.detail(usage))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(Theme.secondary)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

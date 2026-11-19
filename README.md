@@ -16,7 +16,7 @@ Le site en ligne :
 | Chemin | Rôle |
 | --- | --- |
 | `ios/FluxaCore/` | la logique, en Swift pur : mesure du débit, latence, profils, limites et simulation, capacités, historique, stockage. Testée sans l'interface, sous Linux et macOS |
-| `ios/App/` | l'app SwiftUI : tableau de bord, mon réseau, test de débit, partage de connexion, mes appareils, profils, limiteur, automatisations, historique (comparaison et export CSV), réglages, diagnostic, accueil du premier lancement |
+| `ios/App/` | l'app SwiftUI : tableau de bord, mon réseau, test de débit, forfait mobile, partage de connexion et ses sessions, mes appareils, profils, limiteur, automatisations, historique (comparaison et export CSV), réglages, diagnostic, accueil du premier lancement |
 | `ios/App/Services/` | l'accès au système : compteurs des interfaces (`getifaddrs`), type de réseau (`NWPathMonitor`), génération mobile (CoreTelephony), sonde de latence (`NWConnection`), test de débit (`URLSession`), notifications |
 | `ios/AppTests/`, `ios/AppUITests/` | les règles de l'interface, et l'app manipulée écran par écran dans le simulateur |
 | `ios/project.yml` | le projet Xcode, décrit pour [XcodeGen](https://github.com/yonaskolb/XcodeGen) |
