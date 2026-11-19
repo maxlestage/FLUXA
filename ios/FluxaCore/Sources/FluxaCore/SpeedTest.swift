@@ -71,6 +71,18 @@ public struct SpeedMeter: Equatable, Sendable {
         return Double(measuredBytes) * 8 / measured
     }
 
+    /// Le débit à retenir quand la phase est terminée.
+    ///
+    /// Sur une connexion très rapide, le plafond de volume du test est atteint avant la
+    /// fin de l'amorçage : rien n'a alors été mesuré après lui. Le débit est dans ce cas
+    /// calculé sur toute la durée du transfert, amorçage compris. Il sous-estime un peu
+    /// le débit réel, mais reste une mesure, là où l'absence de chiffre serait fausse.
+    public var finalBps: Double? {
+        if let bps { return bps }
+        guard lastTime >= 0.1, totalBytes > 0 else { return nil }
+        return Double(totalBytes) * 8 / lastTime
+    }
+
     /// Le débit à l'instant `time`, pour l'affichage en cours de test : le temps avance
     /// même quand aucun octet n'arrive.
     public func bps(at time: TimeInterval) -> Double? {
