@@ -92,10 +92,14 @@ final class StoreTests: XCTestCase {
         bench.measure(seconds: 5, down: 20, up: 4)
         try bench.engine.flush()
         let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
-        XCTAssertEqual(object?["version"] as? Int, 1)
+        XCTAssertEqual(object?["version"] as? Int, 2, "le format qui porte le forfait et le volume par réseau")
         let minutes = object?["minutes"] as? [[Any]]
         XCTAssertEqual(minutes?.count, 1)
         XCTAssertEqual(minutes?.first?.count, 7, "sept nombres par période")
+        let networkHours = object?["networkHours"] as? [[Any]]
+        XCTAssertEqual(networkHours?.count, 1)
+        XCTAssertEqual(networkHours?.first?.count, 4, "début, réseau, reçu, envoyé")
+        XCTAssertEqual(networkHours?.first?[1] as? String, "cellular")
     }
 
     func testAnUnreadableFileStartsEmptyAndSaysSo() throws {

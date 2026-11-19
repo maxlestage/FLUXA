@@ -3,30 +3,22 @@ import FluxaCore
 import SwiftUI
 
 /// Le tableau de bord : l'état du réseau, les débits, la courbe en direct et les mesures.
+///
+/// Chaque bloc est une vue à part qui lit elle-même ce dont elle a besoin : une mesure
+/// qui change chaque seconde ne redessine que son bloc, pas tout l'écran.
 struct DashboardView: View {
-    @Environment(AppModel.self) private var model
-
-    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
-
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    status
-                    throughput
-                    liveChart
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        Tile("Latence", Format.milliseconds(model.snapshot.latencyMs))
-                        Tile("Gigue", Format.milliseconds(model.snapshot.jitterMs))
-                        Tile("Sondes sans réponse", Format.percent(model.snapshot.packetLossPercent))
-                        Tile(
-                            "Aujourd’hui",
-                            Format.bytes(model.snapshot.receivedBytesToday + model.snapshot.sentBytesToday),
-                            note: "Reçu et envoyé"
-                        )
-                    }
-                    sharing
-                    profile
+                    StatusLine()
+                    ThroughputHeader()
+                    LiveChart()
+                    MeasureTiles()
+                    AbsenceCard()
+                    PlanCard()
+                    SharingCard()
+                    ProfileCard()
                     NavigationLink {
                         SpeedTestView()
                     } label: {
@@ -51,8 +43,12 @@ struct DashboardView: View {
             .navigationTitle("Tableau de bord")
         }
     }
+}
 
-    private var status: some View {
+private struct StatusLine: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
         HStack(spacing: 10) {
             if model.snapshot.isOnline {
                 StatusPill(.supported, "Connecté")
@@ -68,10 +64,14 @@ struct DashboardView: View {
                 .foregroundStyle(Theme.tertiary)
         }
     }
+}
 
-    private var throughput: some View {
+private struct ThroughputHeader: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
         let down = Format.rateParts(model.snapshot.downloadBps)
-        return VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
             Eyebrow("Débit descendant")
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(down.value)
@@ -91,18 +91,22 @@ struct DashboardView: View {
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("debit")
     }
+}
 
-    @ViewBuilder
-    private var liveChart: some View {
+private struct LiveChart: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let samples = model.samples
         Card {
-            if model.samples.count < 2 {
+            if samples.count < 2 {
                 Text("La courbe apparaît après quelques secondes de mesure.")
                     .font(.footnote)
                     .foregroundStyle(Theme.tertiary)
                     .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
             } else {
                 Chart {
-                    ForEach(model.samples) { sample in
+                    ForEach(samples) { sample in
                         AreaMark(
                             x: .value("Heure", sample.date),
                             y: .value("Descendant", sample.downloadBps / 1_000_000)
@@ -129,7 +133,7 @@ struct DashboardView: View {
                     }
                 }
                 .chartXAxis(.hidden)
-                .chartYScale(domain: 0...chartCeiling)
+                .chartYScale(domain: 0...Self.ceiling(of: samples))
                 .chartYAxis {
                     AxisMarks(position: .leading) { _ in
                         AxisGridLine().foregroundStyle(Theme.line)
@@ -144,13 +148,116 @@ struct DashboardView: View {
 
     /// Le haut de l'échelle de la courbe, en Mb/s : un peu au-dessus du plus fort débit,
     /// et jamais moins d'un mégabit pour qu'un débit nul reste posé en bas.
-    private var chartCeiling: Double {
-        let peak = model.samples.map { max($0.downloadBps, $0.uploadBps) }.max() ?? 0
+    static func ceiling(of samples: [ThroughputSample]) -> Double {
+        let peak = samples.reduce(0.0) { max($0, $1.downloadBps, $1.uploadBps) }
         return max(1, peak / 1_000_000 * 1.15)
     }
+}
 
-    /// L'état du partage de connexion, déduit des interfaces du système.
-    private var sharing: some View {
+private struct MeasureTiles: View {
+    @Environment(AppModel.self) private var model
+
+    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+
+    var body: some View {
+        let snapshot = model.snapshot
+        LazyVGrid(columns: columns, spacing: 12) {
+            Tile("Latence", Format.milliseconds(snapshot.latencyMs))
+            Tile("Gigue", Format.milliseconds(snapshot.jitterMs))
+            Tile("Sondes sans réponse", Format.percent(snapshot.packetLossPercent))
+            Tile(
+                "Aujourd’hui",
+                Format.bytes(snapshot.receivedBytesToday + snapshot.sentBytesToday),
+                note: "Reçu et envoyé"
+            )
+        }
+    }
+}
+
+/// Ce qui a été échangé pendant que l'app ne mesurait pas, lu sur les compteurs du
+/// système à la reprise. Rien ne s'affiche pour une absence de moins d'une minute.
+private struct AbsenceCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if let absence = model.absence, absence.duration >= Launch.absenceMinimum {
+            Card {
+                VStack(alignment: .leading, spacing: 8) {
+                    Eyebrow("Pendant que l’app était fermée")
+                    Text(AbsenceText.headline(absence))
+                        .font(.headline.monospacedDigit())
+                        .foregroundStyle(Theme.text)
+                    Text(AbsenceText.detail(absence))
+                        .font(.footnote)
+                        .foregroundStyle(Theme.secondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("hors-app")
+        }
+    }
+}
+
+/// Les phrases du rattrapage, séparées de l'écran pour être testées.
+enum AbsenceText {
+    /// « Au moins 1,80 Go en 2 h 05 ».
+    static func headline(_ absence: AbsenceUsage) -> String {
+        "Au moins \(Format.bytes(absence.totalBytes)) en \(Format.span(absence.duration))"
+    }
+
+    /// Le détail par réseau, et d'où vient le nombre.
+    static func detail(_ absence: AbsenceUsage) -> String {
+        let parts = absence.volumes
+            .sorted { $0.totalBytes > $1.totalBytes }
+            .map { "\($0.kind.title) : \(Format.bytes($0.totalBytes))" }
+        let source = "D’après les compteurs du système, qui repartent de zéro tous les 4 Go."
+        return parts.isEmpty ? source : parts.joined(separator: " · ") + ". " + source
+    }
+}
+
+private struct PlanCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        NavigationLink {
+            PlanView()
+        } label: {
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Eyebrow("Forfait mobile")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.tertiary)
+                    }
+                    if let status = model.plan {
+                        PlanGauge(status: status)
+                        Text(PlanText.summary(status))
+                            .font(.footnote.monospacedDigit())
+                            .foregroundStyle(Theme.secondary)
+                    } else {
+                        Text("Suivre mon forfait")
+                            .font(.headline)
+                            .foregroundStyle(Theme.text)
+                        Text("Indiquez son volume : FLUXA compte ce que l’iPhone consomme sur le réseau mobile, partage compris.")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("forfait")
+    }
+}
+
+/// L'état du partage de connexion, déduit des interfaces du système.
+private struct SharingCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -162,18 +269,47 @@ struct DashboardView: View {
                         StatusPill(.guide, "Non détecté")
                     }
                 }
-                Text(model.sharingDetected
-                    ? "Le débit affiché compte aussi le trafic des appareils reliés à votre iPhone."
-                    : "Activez le partage dans Réglages : FLUXA mesurera la connexion pendant que vous partagez.")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.secondary)
+                if let sharing = model.sharing {
+                    Text(SharingText.rates(sharing))
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(Theme.text)
+                    Text(SharingText.session(sharing.session))
+                        .font(.footnote)
+                        .foregroundStyle(Theme.secondary)
+                } else {
+                    Text("Activez le partage dans Réglages : FLUXA mesurera la connexion pendant que vous partagez.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.secondary)
+                }
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("partage")
     }
+}
 
-    private var profile: some View {
+/// Les phrases du partage de connexion, séparées des écrans pour être testées.
+enum SharingText {
+    /// « ↓ 3,2 Mb/s vers les appareils · ↑ 0,4 Mb/s reçus ».
+    static func rates(_ status: SharingStatus) -> String {
+        "↓ \(Format.rate(status.toDevicesBps)) vers les appareils · ↑ \(Format.rate(status.fromDevicesBps)) reçus"
+    }
+
+    /// « Session de 12 min · 340,0 Mo », avec « au moins » si une partie a été rattrapée.
+    static func session(_ session: SharingSession) -> String {
+        "Session de \(Format.span(session.duration)) · \(volume(session))"
+    }
+
+    static func volume(_ session: SharingSession) -> String {
+        let bytes = Format.bytes(session.totalBytes)
+        return session.isLowerBound ? "au moins \(bytes)" : bytes
+    }
+}
+
+private struct ProfileCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
                 Eyebrow("Profil")

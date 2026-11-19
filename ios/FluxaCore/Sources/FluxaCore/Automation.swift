@@ -32,13 +32,19 @@ public struct AutomationRule: Identifiable, Codable, Equatable, Sendable {
         /// début, la plage passe minuit. `weekdays` suit `Calendar` (1 : dimanche … 7 :
         /// samedi) et désigne le jour où la plage commence ; vide : tous les jours.
         case schedule(startMinute: Int, endMinute: Int, weekdays: Set<Int>)
+        /// Le volume du cycle du forfait (`planStatus().usedBytes`) atteint ce pourcentage
+        /// du forfait, de 1 à 100. Refusée à l'enregistrement sans forfait réglé ; sans
+        /// forfait ensuite, elle ne se déclenche pas. Elle vaut jusqu'à la fin du cycle :
+        /// le profil précédent revient à la remise à zéro du forfait.
+        case planUsage(percent: Int)
     }
 
     public enum Action: Codable, Equatable, Sendable {
         /// Prévenir, sans rien changer.
         case alert
         /// Choisir ce profil. Pour une plage horaire, le profil précédent revient à la
-        /// fin de la plage. Pour un seuil de volume, il revient le lendemain.
+        /// fin de la plage. Pour un seuil de volume, il revient le lendemain ; pour un
+        /// seuil du forfait, à la remise à zéro du forfait.
         case activateProfile(id: String)
     }
 
@@ -82,7 +88,8 @@ public struct AutomationEvent: Identifiable, Codable, Equatable, Sendable {
 struct RuleActivation: Codable, Equatable, Sendable {
     var ruleID: String
     var since: Date
-    /// La fin de la plage, ou le début de la journée suivante pour un seuil de volume.
+    /// La fin de la plage, le début de la journée suivante pour un seuil de volume, ou la
+    /// remise à zéro du forfait pour un seuil du forfait.
     var until: Date
     /// Le profil choisi par la règle. `nil` : elle ne fait que prévenir, ou son profil
     /// n'existe plus.
@@ -104,12 +111,13 @@ extension FluxaEngine {
 
     /// Crée une règle (`id` vide) ou remplace celle qui porte cet identifiant. Refuse un
     /// nom vide, un seuil nul, une plage vide ou hors de la journée, un jour de semaine
-    /// hors de 1 à 7, et un profil inconnu.
+    /// hors de 1 à 7, un pourcentage du forfait hors de 1 à 100 ou posé sans forfait, et
+    /// un profil inconnu.
     @discardableResult
     public func saveRule(_ rule: AutomationRule) throws -> AutomationRule {
         var rule = rule
         rule.name = rule.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        try validate(rule)
+        try validate(rule, replacing: state.rules.first { $0.id == rule.id })
 
         if rule.id.isEmpty {
             rule.id = state.makeRuleID()
@@ -205,7 +213,8 @@ extension FluxaEngine {
 
     // MARK: - Validation
 
-    private func validate(_ rule: AutomationRule) throws {
+    /// - Parameter old: la règle enregistrée que celle-ci remplace, s'il y en a une.
+    private func validate(_ rule: AutomationRule, replacing old: AutomationRule?) throws {
         guard !rule.name.isEmpty else {
             throw FluxaError.invalidRule("Donnez un nom à la règle.")
         }
@@ -225,6 +234,15 @@ extension FluxaEngine {
             guard weekdays.allSatisfy((1...7).contains) else {
                 throw FluxaError.invalidRule(
                     "Les jours de la semaine vont de 1 (dimanche) à 7 (samedi).")
+            }
+        case .planUsage(let percent):
+            guard (1...100).contains(percent) else {
+                throw FluxaError.invalidRule("Le pourcentage du forfait va de 1 à 100.")
+            }
+            // Une règle déjà enregistrée avec ce déclencheur reste modifiable (nom,
+            // action, désactivation) après le retrait du forfait : elle attend son retour.
+            guard state.dataPlan != nil || old?.trigger == rule.trigger else {
+                throw FluxaError.invalidRule("Réglez d’abord votre forfait.")
             }
         }
         if case .activateProfile(let id) = rule.action {
@@ -247,6 +265,15 @@ extension FluxaEngine {
         case .schedule(let startMinute, let endMinute, let weekdays):
             return occurrence(
                 startMinute: startMinute, endMinute: endMinute, weekdays: weekdays, at: date)?.end
+        case .planUsage(let percent):
+            // Sans forfait, la règle attend.
+            guard let status = planStatus(at: date) else { return nil }
+            // En entiers sur 128 bits : le seuil exact se compare sans arrondi.
+            let used = status.usedBytes.multipliedFullWidth(by: 100)
+            let threshold = status.plan.allowanceBytes.multipliedFullWidth(by: UInt64(percent))
+            guard used.high != threshold.high ? used.high > threshold.high : used.low >= threshold.low
+            else { return nil }
+            return status.cycleEnd
         }
     }
 
@@ -324,6 +351,8 @@ extension FluxaEngine {
             subject = "Seuil de \(Self.volume(bytes)) atteint"
         case .schedule(let startMinute, let endMinute, _):
             subject = "Plage \(Self.range(startMinute, endMinute)) commencée"
+        case .planUsage(let percent):
+            subject = "Forfait : \(percent) % atteint"
         }
         return emit(rule, .started, subject + effect, at: date)
     }
@@ -342,6 +371,7 @@ extension FluxaEngine {
             case .dailyUsage: subject = "Nouvelle journée"
             case .schedule(let startMinute, let endMinute, _):
                 subject = "Plage \(Self.range(startMinute, endMinute)) terminée"
+            case .planUsage: subject = "Nouveau cycle du forfait"
             }
         }
 

@@ -26,7 +26,7 @@ public final class FluxaEngine {
     let now: () -> Date
 
     var state: EngineState
-    private var meter: InterfaceMeter
+    var meter: InterfaceMeter
     private var latency = LatencyWindow(capacity: FluxaEngine.latencyProbes)
     private var pathKind: NetworkKind = .offline
     private var pathOnline = false
@@ -39,6 +39,18 @@ public final class FluxaEngine {
     private var today: (start: Date, received: UInt64, sent: UInt64)?
     private var events: [EngineEvent] = []
     private var nextEventID = 1
+    /// L'heure et le jour de la dernière mesure : le calendrier n'est interrogé que
+    /// quand une mesure en sort, pas à chaque relevé.
+    private var currentHour: DateInterval?
+    private var currentDay: DateInterval?
+
+    // L'état en mémoire du rattrapage et du partage (voir Plan.swift).
+    /// Le rattrapage de la dernière reprise de la mesure.
+    var lastCatchUp: AbsenceUsage?
+    /// Si une interface de partage figurait dans le dernier relevé.
+    var sharingPresent = false
+    /// Les débits du pont du partage entre les deux derniers relevés.
+    var sharingRate: (toDevicesBps: Double, fromDevicesBps: Double)?
 
     /// - Parameters:
     ///   - store: où l'état est enregistré. Un état illisible n'empêche pas de
@@ -106,6 +118,9 @@ public final class FluxaEngine {
         latency.clear()
         lastRate = nil
         currentMinute = nil
+        // La session de partage reste ouverte : la reprise dira si elle continue.
+        sharingPresent = false
+        sharingRate = nil
         log(.info, "Mesure arrêtée.")
         saveQuietly()
     }
@@ -128,16 +143,43 @@ public final class FluxaEngine {
     /// Sans effet quand la mesure est arrêtée.
     @discardableResult
     public func ingest(_ readings: [InterfaceReading]) -> NetworkSnapshot {
+        ingest(readings, bootTime: nil)
+    }
+
+    /// Le traitement d'un relevé, pour `ingest(_:)` et `ingest(_:bootTime:)`.
+    func process(_ readings: [InterfaceReading], bootTime: Date?) -> NetworkSnapshot {
         guard isMonitoring else { return snapshot }
         let date = now()
         expireLimitIfNeeded(at: date)
 
-        guard let deltas = meter.push(readings, at: date) else {
+        // Une reprise : le premier relevé depuis `start`, ou un relevé trop éloigné du
+        // précédent pour le compteur en direct. Le volume échangé entre-temps se rattrape
+        // à partir du point de reprise, avant que ce relevé ne le remplace.
+        let isResume =
+            meter.lastDate.map { date.timeIntervalSince($0) > InterfaceMeter.maximumInterval } ?? true
+        let checkpoint = isResume ? resumableCheckpoint(bootTime: bootTime, at: date) : nil
+        if isResume {
+            catchUp(readings, from: checkpoint, at: date)
+        }
+
+        let deltas = meter.push(readings, at: date)
+        measure(deltas, at: date)
+        // Après la mesure : l'enregistrement de fin de minute, fait pendant la mesure,
+        // garde ainsi un point de reprise et une session qui s'arrêtent au même relevé
+        // que les agrégats.
+        followSharing(readings, deltas: deltas, isResume: isResume, checkpoint: checkpoint, at: date)
+        state.checkpoint = bootTime.map { CounterCheckpoint(date: date, bootTime: $0, readings: readings) }
+        return snapshot
+    }
+
+    /// Tire le débit du réseau actif des différences d'un relevé, et le range.
+    private func measure(_ deltas: InterfaceMeter.Deltas?, at date: Date) {
+        guard let deltas else {
             // Relevé de base, ou reprise après une interruption : aucun débit à annoncer.
             lastRate = nil
-            return snapshot
+            return
         }
-        guard let family = pathKind.interfaceClass else { return snapshot }
+        guard let family = pathKind.interfaceClass else { return }
         // Seules les interfaces du réseau actif comptent.
         var received: UInt64 = 0
         var sent: UInt64 = 0
@@ -149,7 +191,7 @@ public final class FluxaEngine {
         }
         guard measured else {
             lastRate = nil
-            return snapshot
+            return
         }
 
         let measurement = Measurement(
@@ -159,8 +201,7 @@ public final class FluxaEngine {
         lastRate = sample
         samples.append(sample)
         samples.removeAll { $0.date <= date.addingTimeInterval(-Self.recentWindow) }
-        record(measurement)
-        return snapshot
+        record(measurement, on: family)
     }
 
     /// Le résultat d'une sonde de latence, en millisecondes. `nil` : pas de réponse.
@@ -370,8 +411,9 @@ public final class FluxaEngine {
         try save()
     }
 
-    /// Efface les mesures, le journal des limites, celui des règles et les tests de
-    /// débit. Les profils et les règles restent.
+    /// Efface les mesures, le journal des limites, celui des règles, les tests de débit,
+    /// le volume par réseau, les volumes rattrapés, les sessions de partage et le
+    /// recalage du forfait. Les profils, les règles et le forfait restent.
     public func eraseHistory() throws {
         state.minutes.removeAll()
         state.hours.removeAll()
@@ -379,6 +421,7 @@ public final class FluxaEngine {
         state.policyLog.removeAll()
         state.automationLog.removeAll()
         state.speedTests.removeAll()
+        eraseVolumes()
         samples.removeAll()
         today = nil
         events.removeAll()
@@ -392,6 +435,8 @@ public final class FluxaEngine {
         state.restoreBuiltinProfiles()
         samples.removeAll()
         today = nil
+        lastCatchUp = nil
+        sharingRate = nil
         events.removeAll()
         log(.info, "Toutes les données ont été effacées.")
         do {
@@ -452,8 +497,9 @@ public final class FluxaEngine {
         log(.info, "Limite arrivée à échéance.", at: date)
     }
 
-    /// Range une mesure dans sa minute, son heure et son jour.
-    private func record(_ measurement: Measurement) {
+    /// Range une mesure dans sa minute, son heure et son jour, et son volume dans
+    /// l'heure et le jour du réseau qui l'a portée.
+    private func record(_ measurement: Measurement, on family: InterfaceClass) {
         let date = measurement.date
         let minute = Self.minuteStart(of: date)
         if let currentMinute, currentMinute != minute {
@@ -464,9 +510,14 @@ public final class FluxaEngine {
         currentMinute = minute
 
         state.minutes.add(measurement, at: minute)
-        state.hours.add(measurement, at: hourStart(of: date))
-        let day = calendar.startOfDay(for: date)
+        let hour = hourStart(of: date)
+        state.hours.add(measurement, at: hour)
+        let day = dayStart(of: date)
         state.days.add(measurement, at: day)
+        state.networkHours.add(
+            kind: family, receivedBytes: measurement.receivedBytes, sentBytes: measurement.sentBytes, at: hour)
+        state.networkDays.add(
+            kind: family, receivedBytes: measurement.receivedBytes, sentBytes: measurement.sentBytes, at: day)
 
         if let totals = today, totals.start == day {
             today = (
@@ -480,7 +531,7 @@ public final class FluxaEngine {
 
     /// Les octets mesurés depuis minuit, d'après les minutes de la journée.
     func todayTotals(at date: Date) -> (received: UInt64, sent: UInt64) {
-        let day = calendar.startOfDay(for: date)
+        let day = dayStart(of: date)
         if let totals = today, totals.start == day {
             return (totals.received, totals.sent)
         }
@@ -492,6 +543,19 @@ public final class FluxaEngine {
         }
         today = (day, received, sent)
         return (received, sent)
+    }
+
+    /// Minuit local du jour de `date`. Le jour de la dernière demande est gardé : la
+    /// plupart des demandes, une ou deux par seconde, tombent dans le même.
+    func dayStart(of date: Date) -> Date {
+        if let currentDay, currentDay.start <= date, date < currentDay.end {
+            return currentDay.start
+        }
+        let start = calendar.startOfDay(for: date)
+        if let interval = calendar.dateInterval(of: .day, for: date), interval.start == start {
+            currentDay = interval
+        }
+        return start
     }
 
     private func series(for step: HistoryStep) -> BucketSeries {
@@ -507,21 +571,27 @@ public final class FluxaEngine {
     }
 
     private func hourStart(of date: Date) -> Date {
-        calendar.dateInterval(of: .hour, for: date)?.start
-            ?? Date(timeIntervalSince1970: (date.timeIntervalSince1970 / 3600).rounded(.down) * 3600)
+        if let currentHour, currentHour.start <= date, date < currentHour.end {
+            return currentHour.start
+        }
+        guard let interval = calendar.dateInterval(of: .hour, for: date) else {
+            return Date(timeIntervalSince1970: (date.timeIntervalSince1970 / 3600).rounded(.down) * 3600)
+        }
+        currentHour = interval
+        return interval.start
     }
 
     // Conservation : minutes 7 jours, heures 30 jours, jours 12 mois.
 
-    private func minuteCutoff(at date: Date) -> Date {
+    func minuteCutoff(at date: Date) -> Date {
         date.addingTimeInterval(-7 * 86_400)
     }
 
-    private func hourCutoff(at date: Date) -> Date {
+    func hourCutoff(at date: Date) -> Date {
         date.addingTimeInterval(-30 * 86_400)
     }
 
-    private func dayCutoff(at date: Date) -> Date {
+    func dayCutoff(at date: Date) -> Date {
         calendar.date(byAdding: .month, value: -12, to: date) ?? date.addingTimeInterval(-365 * 86_400)
     }
 
@@ -529,6 +599,11 @@ public final class FluxaEngine {
         let minutes = state.minutes.removeAll(before: minuteCutoff(at: date))
         let hours = state.hours.removeAll(before: hourCutoff(at: date))
         let days = state.days.removeAll(before: dayCutoff(at: date))
+        // Le volume par réseau suit la conservation des heures et des jours.
+        state.networkHours.removeAll(before: hourCutoff(at: date))
+        state.networkDays.removeAll(before: dayCutoff(at: date))
+        let oldestDay = dayCutoff(at: date)
+        state.absences.removeAll { $0.end < oldestDay }
         if minutes + hours + days > 0 {
             log(.info, "Purge : \(minutes) minutes, \(hours) heures, \(days) jours.", at: date)
         }
@@ -580,7 +655,7 @@ public protocol EngineStore: AnyObject {
 /// Son contenu appartient au moteur.
 public struct EngineState: Codable, Equatable, Sendable {
     /// Version du format enregistré.
-    static let currentVersion = 1
+    static let currentVersion = 2
 
     var version = EngineState.currentVersion
     /// Les préréglages (modifiables), puis les profils de l'utilisateur.
@@ -606,6 +681,21 @@ public struct EngineState: Codable, Equatable, Sendable {
     /// Les appareils notés par l'utilisateur, dans l'ordre de leur ajout.
     var devices: [Device] = []
     var nextDeviceNumber = 1
+    /// Le volume par réseau, à l'heure et au jour (voir Plan.swift).
+    var networkHours = NetworkSeries()
+    var networkDays = NetworkSeries()
+    /// Les volumes rattrapés hors de l'app, du plus ancien au plus récent.
+    var absences: [AbsenceUsage] = []
+    var nextAbsenceID = 1
+    /// Le dernier relevé, pour rattraper à la reprise ce qui aura été échangé entre-temps.
+    var checkpoint: CounterCheckpoint?
+    var dataPlan: DataPlan?
+    var planCalibration: PlanCalibration?
+    /// Les sessions de partage terminées, de la plus ancienne à la plus récente.
+    var sharingSessions: [SharingSession] = []
+    /// La session de partage ouverte au dernier relevé.
+    var currentSharing: SharingSession?
+    var nextSharingSessionID = 1
 
     public init() {}
 
@@ -614,18 +704,22 @@ public struct EngineState: Codable, Equatable, Sendable {
         case minutes, hours, days
         case rules, nextRuleNumber, activations, automationLog, nextAutomationEventID, speedTests
         case devices, nextDeviceNumber
+        case networkHours, networkDays, absences, nextAbsenceID, checkpoint
+        case dataPlan, planCalibration, sharingSessions, currentSharing, nextSharingSessionID
     }
 
     // Un champ absent prend sa valeur par défaut : un fichier écrit par une version
     // plus ancienne reste lisible. Un format plus récent est refusé.
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        version = try values.decodeIfPresent(Int.self, forKey: .version) ?? 1
-        guard version <= EngineState.currentVersion else {
+        let written = try values.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        guard written <= EngineState.currentVersion else {
             throw DecodingError.dataCorruptedError(
                 forKey: .version, in: values,
-                debugDescription: "Format \(version) plus récent que cette version de l'app.")
+                debugDescription: "Format \(written) plus récent que cette version de l'app.")
         }
+        // L'état lu sera réécrit avec les champs de cette version.
+        version = EngineState.currentVersion
         profiles = try values.decodeIfPresent([Profile].self, forKey: .profiles) ?? []
         nextProfileNumber = try values.decodeIfPresent(Int.self, forKey: .nextProfileNumber) ?? 1
         activeProfileID = try values.decodeIfPresent(String.self, forKey: .activeProfileID)
@@ -643,6 +737,16 @@ public struct EngineState: Codable, Equatable, Sendable {
         speedTests = try values.decodeIfPresent([SpeedTestResult].self, forKey: .speedTests) ?? []
         devices = try values.decodeIfPresent([Device].self, forKey: .devices) ?? []
         nextDeviceNumber = try values.decodeIfPresent(Int.self, forKey: .nextDeviceNumber) ?? 1
+        networkHours = try values.decodeIfPresent(NetworkSeries.self, forKey: .networkHours) ?? NetworkSeries()
+        networkDays = try values.decodeIfPresent(NetworkSeries.self, forKey: .networkDays) ?? NetworkSeries()
+        absences = try values.decodeIfPresent([AbsenceUsage].self, forKey: .absences) ?? []
+        nextAbsenceID = try values.decodeIfPresent(Int.self, forKey: .nextAbsenceID) ?? 1
+        checkpoint = try values.decodeIfPresent(CounterCheckpoint.self, forKey: .checkpoint)
+        dataPlan = try values.decodeIfPresent(DataPlan.self, forKey: .dataPlan)
+        planCalibration = try values.decodeIfPresent(PlanCalibration.self, forKey: .planCalibration)
+        sharingSessions = try values.decodeIfPresent([SharingSession].self, forKey: .sharingSessions) ?? []
+        currentSharing = try values.decodeIfPresent(SharingSession.self, forKey: .currentSharing)
+        nextSharingSessionID = try values.decodeIfPresent(Int.self, forKey: .nextSharingSessionID) ?? 1
     }
 
     /// Remet les sept préréglages en tête, dans leur ordre. Un préréglage déjà présent
