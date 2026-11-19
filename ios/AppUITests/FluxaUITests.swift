@@ -386,7 +386,9 @@ final class FluxaUITests: XCTestCase {
             assertNoError()
         }
         // Sur un jour, le volume se lit aussi par réseau.
-        XCTAssertTrue(scroll(to: app.descendants(matching: .any)["par-reseau"]))
+        let networks = app.descendants(matching: .any).matching(identifier: "par-reseau").firstMatch
+        XCTAssertTrue(networks.waitForExistence(timeout: 10))
+        XCTAssertTrue(scroll(to: element(containing: "PAR RÉSEAU")))
     }
 
     func testTheHistoryCanBeErased() {
