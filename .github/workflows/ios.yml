@@ -63,14 +63,17 @@ jobs:
       - name: Launch in a simulator and take screenshots
         working-directory: ios
         continue-on-error: true
+        # Le premier démarrage d'un simulateur peut durer plusieurs minutes sur un runner.
+        timeout-minutes: 12
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           device=$(xcrun simctl list devices available -j | python3 -c "
           import json, sys
           runtimes = json.load(sys.stdin)['devices']
           for runtime in sorted((r for r in runtimes if 'iOS' in r), reverse=True):
               for device in runtimes[runtime]:
                   if device['name'].startswith('iPhone'):
+                      print(runtime, device['name'], file=sys.stderr)
                       print(device['udid'])
                       sys.exit(0)
           sys.exit('no iPhone simulator')

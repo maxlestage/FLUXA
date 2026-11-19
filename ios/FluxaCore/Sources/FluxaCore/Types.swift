@@ -167,8 +167,12 @@ public enum Limits {
     public static let maximumBps: UInt64 = 1_000_000_000
     public static let minimumDurationSeconds: UInt64 = 60
 
+    /// Un débit en Mb/s converti en bit/s. Une valeur négative ou non numérique donne 0,
+    /// que la validation refuse ensuite : une saisie ne fait jamais planter l'app.
     public static func bps(fromMbps mbps: Double) -> UInt64 {
-        UInt64((mbps * 1_000_000).rounded())
+        let bps = (mbps * 1_000_000).rounded()
+        guard bps.isFinite, bps > 0 else { return 0 }
+        return bps >= 1e18 ? 1_000_000_000_000_000_000 : UInt64(bps)
     }
 
     public static func mbps(fromBps bps: UInt64) -> Double {
