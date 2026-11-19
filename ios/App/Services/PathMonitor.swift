@@ -10,9 +10,6 @@ struct PathDetails: Equatable {
     var isExpensive = false
     /// Mode « Données réduites » activé.
     var isConstrained = false
-    var supportsIPv4 = false
-    var supportsIPv6 = false
-    var supportsDNS = false
     /// La génération du réseau mobile (« 5G »), quand le système la donne.
     var radio: String?
 
@@ -68,9 +65,6 @@ final class PathMonitor {
             isOnline: online,
             isExpensive: path.isExpensive,
             isConstrained: path.isConstrained,
-            supportsIPv4: path.supportsIPv4,
-            supportsIPv6: path.supportsIPv6,
-            supportsDNS: path.supportsDNS,
             radio: kind == .cellular ? RadioTechnology.current() : nil
         )
     }
