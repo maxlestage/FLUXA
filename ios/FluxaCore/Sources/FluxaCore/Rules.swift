@@ -79,6 +79,10 @@ enum Rules {
         "iOS ne laisse aucune app limiter le débit du partage de connexion. "
         + "Le plafond est enregistré et son effet est simulé, rien n’est appliqué."
 
+    static let relayLimitReason =
+        "Appliqué par le relais FLUXA au trafic des appareils réglés sur lui. "
+        + "Le trafic qui ne passe pas par le relais n’est pas plafonné : iOS ne permet pas de limiter le partage lui-même."
+
     static let deviceLimitReason =
         "iOS ne laisse aucune app limiter un appareil relié au partage de connexion. "
         + "La demande est enregistrée, sans effet."
@@ -107,9 +111,15 @@ enum Rules {
             case .hotspotClientDiscovery:
                 return (.unsupported, "iOS ne fournit pas la liste des appareils reliés au partage de connexion.")
             case .hotspotLimit:
-                return (.unsupported, "iOS ne laisse aucune app agir sur le trafic du partage de connexion.")
+                return (
+                    .unsupported,
+                    "iOS ne laisse aucune app agir sur le trafic du partage de connexion. Le relais FLUXA plafonne le trafic des appareils réglés sur lui."
+                )
             case .perDeviceShaping:
-                return (.unsupported, "iOS ne laisse aucune app limiter un appareil relié au partage.")
+                return (
+                    .unsupported,
+                    "iOS ne laisse aucune app limiter un appareil relié au partage. Le relais FLUXA plafonne chaque appareil réglé sur lui."
+                )
             case .clientDisconnect:
                 return (.unsupported, "iOS ne laisse aucune app déconnecter un appareil du partage.")
             }

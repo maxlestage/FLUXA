@@ -16,8 +16,11 @@
 //!
 //! L'ABI C est décrite dans `include/fluxa_shaper.h`. Le rapport est un JSON en UTF-8.
 
-use std::ffi::{c_char, CString};
+use std::ffi::{c_char, CStr, CString};
 use std::io;
+use std::sync::Mutex;
+
+pub mod relay;
 
 /// Ce que le système a répondu à une tentative.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -312,6 +315,98 @@ pub extern "C" fn fluxa_shaper_version() -> *const c_char {
     concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr().cast()
 }
 
+// MARK: L'ABI C du relais
+
+/// Le relais en service, partagé par les fonctions de l'ABI C.
+static RELAY: Mutex<Option<relay::Relay>> = Mutex::new(None);
+
+fn relay_slot() -> std::sync::MutexGuard<'static, Option<relay::Relay>> {
+    RELAY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Ouvre le relais sur ce port. `allow_loopback` non nul sert aussi la boucle locale
+/// (simulateur, tests). Renvoie 0, ou le code d'erreur du système. Un relais déjà ouvert
+/// est d'abord fermé ; les plafonds sont à régler de nouveau.
+#[no_mangle]
+pub extern "C" fn fluxa_relay_start(port: u16, allow_loopback: u8) -> i32 {
+    let mut slot = relay_slot();
+    slot.take();
+    match relay::Relay::start(port, allow_loopback != 0) {
+        Ok(relay) => {
+            *slot = Some(relay);
+            0
+        }
+        Err(error) => error.raw_os_error().unwrap_or(libc::EIO),
+    }
+}
+
+/// Ferme le relais et coupe les connexions en cours.
+#[no_mangle]
+pub extern "C" fn fluxa_relay_stop() {
+    relay_slot().take();
+}
+
+/// Le plafond de tout le trafic relayé, en bits par seconde. Zéro : sans plafond.
+#[no_mangle]
+pub extern "C" fn fluxa_relay_set_limit(download_bps: u64, upload_bps: u64) {
+    if let Some(relay) = relay_slot().as_ref() {
+        relay.set_limit(relay::Limit {
+            download: download_bps / 8,
+            upload: upload_bps / 8,
+        });
+    }
+}
+
+/// Le plafond d'un appareil (adresse IP en texte), en bits par seconde. Zéro dans les
+/// deux sens : le plafond de l'appareil est retiré. Renvoie 0, ou EINVAL pour une adresse
+/// illisible, ou ENOTCONN si le relais est fermé.
+///
+/// # Safety
+/// `address` doit être une chaîne C valide, terminée par un zéro.
+#[no_mangle]
+pub unsafe extern "C" fn fluxa_relay_set_device_limit(
+    address: *const c_char,
+    download_bps: u64,
+    upload_bps: u64,
+) -> i32 {
+    if address.is_null() {
+        return libc::EINVAL;
+    }
+    let Some(address) = CStr::from_ptr(address)
+        .to_str()
+        .ok()
+        .and_then(|text| text.parse().ok())
+    else {
+        return libc::EINVAL;
+    };
+    match relay_slot().as_ref() {
+        Some(relay) => {
+            relay.set_device_limit(
+                address,
+                relay::Limit {
+                    download: download_bps / 8,
+                    upload: upload_bps / 8,
+                },
+            );
+            0
+        }
+        None => libc::ENOTCONN,
+    }
+}
+
+/// L'état du relais en JSON (plafonds en octets par seconde), à rendre avec
+/// `fluxa_shaper_free`. Relais fermé : `{"running":false}`.
+#[no_mangle]
+pub extern "C" fn fluxa_relay_status() -> *mut c_char {
+    let json = match relay_slot().as_ref() {
+        Some(relay) => relay.status_json(),
+        None => "{\"running\":false}".to_string(),
+    };
+    CString::new(json).unwrap_or_default().into_raw()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -371,6 +466,42 @@ mod tests {
     #[test]
     fn json_text_is_escaped() {
         assert_eq!(quote("a\"b\\c\nd\u{1}"), "\"a\\\"b\\\\c\\nd\\u0001\"");
+    }
+
+    #[test]
+    fn the_relay_is_driven_through_the_c_abi() {
+        fn status() -> String {
+            let pointer = fluxa_relay_status();
+            let text = unsafe { CStr::from_ptr(pointer) }
+                .to_str()
+                .unwrap()
+                .to_owned();
+            unsafe { fluxa_shaper_free(pointer) };
+            text
+        }
+        fluxa_relay_stop();
+        assert_eq!(status(), "{\"running\":false}");
+        assert_eq!(
+            unsafe { fluxa_relay_set_device_limit(c"10.0.0.2".as_ptr(), 8_000, 0) },
+            libc::ENOTCONN
+        );
+        assert_eq!(fluxa_relay_start(0, 1), 0);
+        fluxa_relay_set_limit(8_000_000, 0);
+        assert!(
+            status().contains("\"download_limit\":1000000"),
+            "{}",
+            status()
+        );
+        assert_eq!(
+            unsafe { fluxa_relay_set_device_limit(c"pas une adresse".as_ptr(), 1, 1) },
+            libc::EINVAL
+        );
+        assert_eq!(
+            unsafe { fluxa_relay_set_device_limit(c"172.20.10.3".as_ptr(), 8_000, 0) },
+            0
+        );
+        fluxa_relay_stop();
+        assert_eq!(status(), "{\"running\":false}");
     }
 
     #[test]

@@ -91,8 +91,20 @@ struct LimiterView: View {
                 LabeledContent("Appliqué au partage") {
                     StatusPill(.reserved, "Réservé à iOS")
                 }
+                NavigationLink {
+                    RelayView()
+                } label: {
+                    LabeledContent("Par le relais FLUXA") {
+                        if model.relayIsRunning {
+                            StatusPill(.simulated, "Partiel")
+                        } else {
+                            StatusPill(.guide, "Relais arrêté")
+                        }
+                    }
+                }
                 LabeledContent("Statut affiché") {
-                    StatusPill(.simulated, "Simulé")
+                    let status = model.lastApply?.status ?? .simulated
+                    StatusPill(status.pill, status.title)
                 }
             } header: {
                 Text("Ce que fait l’iPhone")

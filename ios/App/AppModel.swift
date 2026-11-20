@@ -1,6 +1,7 @@
 import FluxaCore
 import Foundation
 import Observation
+import UIKit
 
 /// L'état de l'app : il relie le moteur aux services du système et aux écrans.
 ///
@@ -42,6 +43,30 @@ final class AppModel {
     private(set) var plan: PlanStatus?
     /// L'intervalle entre deux sondes de latence, en secondes.
     private(set) var probeInterval = AppModel.probeIntervals.normal
+    /// L'état du relais de partage, relevé chaque seconde quand il est ouvert.
+    private(set) var relayStatus: RelayStatus?
+    /// Le débit de chaque appareil relayé, par adresse.
+    private(set) var relayRates: [String: RelayRate] = [:]
+    private(set) var relayError: String?
+    private var relayPreviousSample: (date: Date, clients: [String: RelayStatus.Client])?
+
+    /// Le relais ouvert à la demande de l'utilisateur, rouvert au retour dans l'app.
+    var relayEnabled: Bool {
+        didSet { UserDefaults.standard.set(relayEnabled, forKey: Self.relayKey) }
+    }
+
+    /// L'écran reste allumé tant que le relais est ouvert : iOS suspend l'app sinon.
+    var keepsScreenOnForRelay: Bool {
+        didSet {
+            UserDefaults.standard.set(keepsScreenOnForRelay, forKey: Self.keepsScreenOnKey)
+            updateIdleTimer()
+        }
+    }
+
+    /// Le profil de chaque appareil relayé, par adresse.
+    private(set) var relayDeviceProfiles: [String: String] {
+        didSet { UserDefaults.standard.set(relayDeviceProfiles, forKey: Self.relayDeviceProfilesKey) }
+    }
     private(set) var rules: [AutomationRule] = []
     private(set) var automationEvents: [AutomationEvent] = []
     private(set) var speedTests: [SpeedTestResult] = []
@@ -71,6 +96,9 @@ final class AppModel {
     private static let latencyHostKey = "latencyHost"
     private static let notifiesKey = "notifiesAutomations"
     private static let speedTestServerKey = "speedTestServer"
+    private static let relayKey = "relayEnabled"
+    private static let keepsScreenOnKey = "relayKeepsScreenOn"
+    private static let relayDeviceProfilesKey = "relayDeviceProfiles"
 
     init() {
         let opened = Self.openStore()
@@ -79,6 +107,9 @@ final class AppModel {
         notifiesAutomations = UserDefaults.standard.bool(forKey: Self.notifiesKey)
         speedTestServer = UserDefaults.standard.string(forKey: Self.speedTestServerKey)
             ?? SpeedTestRunner.defaultServer
+        relayEnabled = UserDefaults.standard.bool(forKey: Self.relayKey)
+        keepsScreenOnForRelay = UserDefaults.standard.object(forKey: Self.keepsScreenOnKey) as? Bool ?? true
+        relayDeviceProfiles = UserDefaults.standard.dictionary(forKey: Self.relayDeviceProfilesKey) as? [String: String] ?? [:]
         refreshProfiles()
         refreshAutomations()
         speedTests = engine.speedTests
@@ -138,6 +169,9 @@ final class AppModel {
             self.engine.updatePath(kind: details.kind, isOnline: details.isOnline)
             self.snapshot = self.engine.snapshot
         }
+        if relayEnabled {
+            openRelay()
+        }
         sampling = Task { [weak self] in
             while !Task.isCancelled {
                 self?.sample()
@@ -149,6 +183,8 @@ final class AppModel {
     func stop() {
         sampling?.cancel()
         sampling = nil
+        // iOS suspend l'app en arrière-plan : le relais se ferme et se rouvre au retour.
+        closeRelay()
         pathMonitor.stop()
         engine.stop()
         do {
@@ -182,6 +218,7 @@ final class AppModel {
         set(\.snapshot, snapshot)
         set(\.samples, engine.recentSamples)
         refreshSharing()
+        refreshRelay()
         let absence = engine.lastAbsence
         if absence != self.absence {
             self.absence = absence
@@ -254,6 +291,7 @@ final class AppModel {
 
     func activate(_ profile: Profile) {
         perform { _ = try engine.activateProfile(id: profile.id) }
+        applyRelayLimits()
     }
 
     /// Enregistre un profil. Renvoie le message d'erreur, ou `nil` si c'est fait.
@@ -311,7 +349,115 @@ final class AppModel {
 
     @discardableResult
     func apply(_ policy: BandwidthPolicy) -> Bool {
-        perform { _ = try engine.apply(policy) }
+        let done = perform { _ = try engine.apply(policy) }
+        applyRelayLimits()
+        return done
+    }
+
+    // MARK: Relais de partage
+
+    var relayIsRunning: Bool { relayStatus?.running == true }
+
+    /// Ouvre ou ferme le relais, à la demande de l'utilisateur.
+    func setRelay(_ enabled: Bool) {
+        relayEnabled = enabled
+        if enabled {
+            openRelay()
+        } else {
+            closeRelay()
+        }
+    }
+
+    private func openRelay() {
+        #if targetEnvironment(simulator)
+        // Dans le simulateur, les appareils de test arrivent par la boucle locale.
+        let allowLoopback = true
+        #else
+        let allowLoopback = false
+        #endif
+        let code = RelayBridge.start(allowLoopback: allowLoopback)
+        guard code == 0 else {
+            relayError = Self.relayProblem(code)
+            relayStatus = nil
+            updateIdleTimer()
+            return
+        }
+        relayError = nil
+        relayPreviousSample = nil
+        relayRates = [:]
+        applyRelayLimits()
+        refreshRelay()
+        updateIdleTimer()
+    }
+
+    private func closeRelay() {
+        RelayBridge.stop()
+        relayStatus = nil
+        relayRates = [:]
+        relayPreviousSample = nil
+        engine.relayStopped()
+        refreshProfiles()
+        updateIdleTimer()
+    }
+
+    static func relayProblem(_ code: Int32) -> String {
+        switch code {
+        case EADDRINUSE:
+            return "Le port \(RelayBridge.port) est déjà utilisé : le relais n’a pas pu s’ouvrir."
+        case EACCES, EPERM:
+            return "iOS a refusé l’ouverture du relais (erreur \(code))."
+        default:
+            return "Le relais n’a pas pu s’ouvrir (erreur \(code))."
+        }
+    }
+
+    /// Donne au relais le plafond en cours et celui de chaque appareil, et consigne la
+    /// limite comme appliquée par le relais.
+    private func applyRelayLimits() {
+        guard relayStatus != nil || relayEnabled, relayError == nil else { return }
+        let policy = engine.lastApplyResult?.requested ?? activeProfile?.policy
+        RelayBridge.setLimit(downloadBps: policy?.downloadBps, uploadBps: policy?.uploadBps)
+        for (address, profileID) in relayDeviceProfiles {
+            let profile = profiles.first { $0.id == profileID }
+            RelayBridge.setDeviceLimit(address: address, downloadBps: profile?.downloadBps, uploadBps: profile?.uploadBps)
+        }
+        if let policy, policy.downloadBps != nil || policy.uploadBps != nil {
+            _ = try? engine.confirmRelayLimit(policy)
+            refreshProfiles()
+            historyRevision += 1
+        }
+    }
+
+    /// Le profil d'un appareil relayé. `nil` : plus de plafond propre à l'appareil.
+    func setRelayProfile(_ profileID: String?, for address: String) {
+        relayDeviceProfiles[address] = profileID
+        let profile = profiles.first { $0.id == profileID }
+        RelayBridge.setDeviceLimit(address: address, downloadBps: profile?.downloadBps, uploadBps: profile?.uploadBps)
+        refreshRelay()
+    }
+
+    private func refreshRelay() {
+        guard relayEnabled, relayError == nil else { return }
+        guard let status = RelayBridge.status(), status.running else {
+            set(\.relayStatus, nil)
+            return
+        }
+        let now = Date()
+        let clients = status.clients ?? []
+        if let previous = relayPreviousSample {
+            let seconds = now.timeIntervalSince(previous.date)
+            var rates: [String: RelayRate] = [:]
+            for client in clients {
+                rates[client.address] = RelayRate.between(previous.clients[client.address], client, seconds: seconds)
+            }
+            set(\.relayRates, rates)
+        }
+        relayPreviousSample = (now, Dictionary(uniqueKeysWithValues: clients.map { ($0.address, $0) }))
+        set(\.relayStatus, status)
+    }
+
+    private func updateIdleTimer() {
+        UIApplication.shared.isIdleTimerDisabled = relayStatus != nil && keepsScreenOnForRelay
     }
 
     /// Le message d'erreur d'une limite invalide, ou `nil` si elle est correcte.
