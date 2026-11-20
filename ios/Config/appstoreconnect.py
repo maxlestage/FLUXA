@@ -2,12 +2,13 @@
 
 - Écrit la clé d'API dans KEY_PATH, au format PEM, même si elle a été collée sur une
   seule ligne ou sans ses lignes BEGIN et END.
-- Si BUNDLE_ID manque, le retrouve dans App Store Connect : l'app du compte, ou celle
-  dont le nom contient « FLUXA » s'il y en a plusieurs.
-- Si TEAM_ID manque, prend le préfixe de l'identifiant de l'app (seedId), qui est
-  l'identifiant de l'équipe.
+- Enregistre l'identifiant de l'app (BUNDLE_ID) sur le compte développeur s'il ne l'est
+  pas encore, et en tire l'identifiant de l'équipe (le préfixe seedId) si TEAM_ID manque.
+- Vérifie que l'app existe dans App Store Connect : une app ne peut pas y être créée par
+  l'API, il faut le faire une fois à la main.
 
-Les valeurs trouvées sont ajoutées à GITHUB_ENV pour les étapes suivantes.
+Le dépôt est public, ses journaux aussi : rien d'autre que l'identifiant de FLUXA n'est
+écrit dans les messages.
 """
 
 import json
@@ -58,63 +59,67 @@ def token(pem: str) -> str:
         raise
 
 
-def get(path: str, bearer: str) -> list:
-    request = urllib.request.Request(API + path, headers={"Authorization": f"Bearer {bearer}"})
+def call(path: str, bearer: str, body: dict | None = None) -> list | dict:
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(
+        API + path,
+        data=data,
+        method="POST" if body is not None else "GET",
+        headers={"Authorization": f"Bearer {bearer}", "Content-Type": "application/json"},
+    )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.load(response)["data"]
     except urllib.error.HTTPError as error:
-        detail = error.read().decode(errors="replace")[:400]
         if error.code == 401:
             fail(
                 "App Store Connect refuse la clé (401). Vérifiez ASC_KEY_ID, ASC_ISSUER_ID et ASC_KEY : "
                 "les trois doivent venir de la même clé, qui ne doit pas être révoquée."
             )
         if error.code == 403:
-            fail(f"La clé n'a pas les droits nécessaires (403). Donnez-lui le rôle Admin. {detail}")
-        fail(f"App Store Connect a répondu {error.code} : {detail}")
+            fail("La clé n'a pas les droits nécessaires (403). Donnez-lui le rôle Admin.")
+        fail(f"App Store Connect a répondu {error.code} à {path.split('?')[0]}.")
         raise
 
 
-def find_bundle_id(bearer: str) -> str:
-    apps = get("/v1/apps?fields[apps]=name,bundleId&limit=200", bearer)
-    if not apps:
-        fail(
-            "Aucune app dans App Store Connect. Créez-la (Apps → + → Nouvelle app) avec l'identifiant "
-            "enregistré sur developer.apple.com, puis relancez."
-        )
-    if len(apps) > 1:
-        named = [app for app in apps if "fluxa" in app["attributes"]["name"].lower()]
-        if len(named) != 1:
-            names = ", ".join(f"{app['attributes']['name']} ({app['attributes']['bundleId']})" for app in apps)
-            fail(f"Plusieurs apps dans App Store Connect : {names}. Réglez la variable IOS_BUNDLE_ID.")
-        apps = named
-    return apps[0]["attributes"]["bundleId"]
-
-
-def find_team_id(bundle_id: str, bearer: str) -> str:
+def bundle_record(bundle_id: str, bearer: str) -> dict:
+    """L'identifiant sur le compte développeur, enregistré au besoin."""
     query = urllib.parse.urlencode({"filter[identifier]": bundle_id, "fields[bundleIds]": "identifier,seedId"})
-    matches = [item for item in get(f"/v1/bundleIds?{query}", bearer) if item["attributes"]["identifier"] == bundle_id]
-    if not matches:
+    for item in call(f"/v1/bundleIds?{query}", bearer):
+        if item["attributes"]["identifier"] == bundle_id:
+            return item
+    print(f"::notice::Enregistrement de l'identifiant {bundle_id} sur le compte développeur.")
+    return call(
+        "/v1/bundleIds",
+        bearer,
+        {"data": {"type": "bundleIds", "attributes": {"identifier": bundle_id, "name": "FLUXA", "platform": "IOS"}}},
+    )
+
+
+def check_app(bundle_id: str, bearer: str) -> None:
+    query = urllib.parse.urlencode({"filter[bundleId]": bundle_id, "fields[apps]": "bundleId"})
+    if not any(app["attributes"]["bundleId"] == bundle_id for app in call(f"/v1/apps?{query}", bearer)):
         fail(
-            f"L'identifiant {bundle_id} n'est pas enregistré sur developer.apple.com "
-            "(Certificates, Identifiers & Profiles → Identifiers)."
+            f"L'app n'existe pas encore dans App Store Connect. Créez-la une fois : Apps → + → Nouvelle app, "
+            f"plateforme iOS, nom FLUXA, langue français, identifiant {bundle_id} (il est enregistré et "
+            "figure dans la liste), SKU fluxa-ios. Puis relancez ce workflow."
         )
-    return matches[0]["attributes"]["seedId"]
 
 
 def main() -> None:
     pem = write_key()
     bundle_id = os.environ.get("BUNDLE_ID", "").strip()
-    team_id = os.environ.get("TEAM_ID", "").strip()
-    bearer = token(pem)
     if not bundle_id:
-        bundle_id = find_bundle_id(bearer)
-    if not team_id:
-        team_id = find_team_id(bundle_id, bearer)
+        fail("L'identifiant de l'app (BUNDLE_ID) est vide.")
+    bearer = token(pem)
+    record = bundle_record(bundle_id, bearer)
+    team_id = os.environ.get("TEAM_ID", "").strip() or record["attributes"]["seedId"]
+    check_app(bundle_id, bearer)
     with open(os.environ["GITHUB_ENV"], "a") as env:
         env.write(f"BUNDLE_ID={bundle_id}\nTEAM_ID={team_id}\n")
-    print(f"::notice::App {bundle_id}, équipe {team_id}.")
+    # L'identifiant de l'équipe est masqué dans le journal public.
+    print(f"::add-mask::{team_id}")
+    print(f"::notice::App {bundle_id} trouvée dans App Store Connect.")
 
 
 if __name__ == "__main__":
