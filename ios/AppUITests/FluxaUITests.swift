@@ -60,6 +60,16 @@ final class FluxaUITests: XCTestCase {
         return XCTWaiter().wait(for: [waiting], timeout: timeout) == .completed
     }
 
+    /// Donne le clavier à un champ, en le touchant de nouveau si le premier geste n'a pas
+    /// suffi (la feuille vient parfois de finir son animation).
+    private func focus(_ field: XCUIElement) {
+        field.tap()
+        if !app.keyboards.firstMatch.waitForExistence(timeout: 3) {
+            field.tap()
+            _ = app.keyboards.firstMatch.waitForExistence(timeout: 3)
+        }
+    }
+
     /// Allume un interrupteur, en touchant le bouton lui-même si la ligne ne suffit pas.
     private func turnOn(_ toggle: XCUIElement) {
         if (toggle.value as? String) == "1" { return }
@@ -177,7 +187,7 @@ final class FluxaUITests: XCTestCase {
         app.navigationBars["Profils"].buttons["Nouveau profil"].tap()
         let name = app.textFields["Nom du profil"]
         XCTAssertTrue(name.waitForExistence(timeout: 10))
-        name.tap()
+        focus(name)
         name.typeText("Essai")
         app.navigationBars.buttons["Enregistrer"].tap()
         assertNoError()
@@ -224,10 +234,11 @@ final class FluxaUITests: XCTestCase {
         let attempt = app.buttons["tenter-application"]
         XCTAssertTrue(scroll(to: attempt))
         attempt.tap()
-        // Le module Rust répond, voie par voie, et le bilan ne prétend rien appliquer.
+        // Le module Rust répond, voie par voie, et le bilan ne prétend rien appliquer. Les
+        // lignes ajoutées poussent le bilan plus bas : la liste ne le crée qu'à l'écran.
+        XCTAssertTrue(element(containing: "Filtre de paquets").waitForExistence(timeout: 10))
         let summary = app.descendants(matching: .any)["bilan-tentative"]
-        XCTAssertTrue(summary.waitForExistence(timeout: 10))
-        XCTAssertTrue(element(containing: "Filtre de paquets").exists)
+        XCTAssertTrue(scroll(to: summary))
         XCTAssertTrue(summary.label.contains("Rien n’est appliqué") || summary.label.contains("rien n’est appliqué"), summary.label)
         XCTAssertFalse(hasElement(labelled: "Appliqué"))
         assertNoError()
@@ -243,7 +254,7 @@ final class FluxaUITests: XCTestCase {
         app.navigationBars["Mes appareils"].buttons["Nouvel appareil"].tap()
         let name = app.textFields["Nom de l’appareil"]
         XCTAssertTrue(name.waitForExistence(timeout: 10))
-        name.tap()
+        focus(name)
         name.typeText("MacBook")
         app.navigationBars.buttons["Enregistrer"].tap()
         XCTAssertFalse(app.descendants(matching: .any)["erreur-appareil"].waitForExistence(timeout: 2))
@@ -297,7 +308,7 @@ final class FluxaUITests: XCTestCase {
         app.navigationBars["Automatisations"].buttons["Nouvelle règle"].tap()
         let name = app.textFields["Nom de la règle"]
         XCTAssertTrue(name.waitForExistence(timeout: 10))
-        name.tap()
+        focus(name)
         name.typeText("Forfait")
         app.navigationBars.buttons["Enregistrer"].tap()
         XCTAssertFalse(app.descendants(matching: .any)["erreur-regle"].waitForExistence(timeout: 2))
@@ -336,7 +347,7 @@ final class FluxaUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Forfait mobile"].waitForExistence(timeout: 30))
         let volume = app.textFields["volume-forfait"]
         XCTAssertTrue(scroll(to: volume))
-        volume.tap()
+        focus(volume)
         // Un forfait déjà réglé par un test précédent est remplacé.
         volume.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + "50")
         closeKeyboard()
@@ -358,7 +369,7 @@ final class FluxaUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Forfait mobile"].waitForExistence(timeout: 30))
         let volume = app.textFields["volume-forfait"]
         XCTAssertTrue(scroll(to: volume))
-        volume.tap()
+        focus(volume)
         // Une saisie qui n'est pas un nombre.
         volume.typeText("x")
         closeKeyboard()
