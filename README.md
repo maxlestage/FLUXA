@@ -3,7 +3,7 @@
 FLUXA est un moniteur de connexion pour iPhone : débit, latence, consommation, profils de débit
 et guide du partage de connexion.
 
-- L'app iOS (`ios/`) est écrite en Swift natif : SwiftUI pour l'interface, un paquet Swift pour la logique, et un module Rust lié par l'ABI C pour tenter d'appliquer un plafond au partage de connexion.
+- L'app iOS (`ios/`) est écrite en Swift natif : SwiftUI pour l'interface, un paquet Swift pour la logique, et un module Rust lié par l'ABI C : le relais de partage, qui plafonne et mesure pour de vrai le trafic des appareils reliés réglés sur lui.
 - Le site (`site/`) est écrit en Rust avec Paquets.
 
 Le site en ligne :

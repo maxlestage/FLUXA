@@ -48,6 +48,8 @@ targets:
         UIUserInterfaceStyle: Dark
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        # Le relais de partage reçoit les connexions des appareils reliés à l'iPhone.
+        NSLocalNetworkUsageDescription: FLUXA reçoit les connexions des appareils reliés à votre partage de connexion pour relayer, mesurer et plafonner leur trafic.
         # L'app n'utilise que le chiffrement du système (TLS).
         ITSAppUsesNonExemptEncryption: false
     settings:
