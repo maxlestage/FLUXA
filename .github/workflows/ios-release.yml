@@ -60,6 +60,9 @@ jobs:
           "$RUNNER_TEMP/venv/bin/python" ios/Config/appstoreconnect.py
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Build the Rust shaper (C ABI)
+        working-directory: ios
+        run: ./Shaper/build-xcframework.sh
       - name: Generate the Xcode project
         working-directory: ios
         run: xcodegen generate

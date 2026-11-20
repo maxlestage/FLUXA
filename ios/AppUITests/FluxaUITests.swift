@@ -209,6 +209,21 @@ final class FluxaUITests: XCTestCase {
         XCTAssertFalse(hasElement(labelled: "Appliqué"))
     }
 
+    func testTheLimiterTriesTheSystemAndReportsItsAnswer() {
+        launch(["-fluxaScreen", "limiteur"])
+        XCTAssertTrue(app.navigationBars["Limiteur de débit"].waitForExistence(timeout: 30))
+        let attempt = app.buttons["tenter-application"]
+        XCTAssertTrue(scroll(to: attempt))
+        attempt.tap()
+        // Le module Rust répond, voie par voie, et le bilan ne prétend rien appliquer.
+        let summary = app.descendants(matching: .any)["bilan-tentative"]
+        XCTAssertTrue(summary.waitForExistence(timeout: 10))
+        XCTAssertTrue(element(containing: "Filtre de paquets").exists)
+        XCTAssertTrue(summary.label.contains("Rien n’est appliqué") || summary.label.contains("rien n’est appliqué"), summary.label)
+        XCTAssertFalse(hasElement(labelled: "Appliqué"))
+        assertNoError()
+    }
+
     // MARK: Appareils
 
     func testADeviceCanBeNoted() {

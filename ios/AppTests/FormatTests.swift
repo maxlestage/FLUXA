@@ -295,6 +295,30 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(boot.timeIntervalSince(again), 0, accuracy: 10)
     }
 
+    func testTheRustModuleAnswersThroughTheCABI() throws {
+        let report = try XCTUnwrap(KernelShaper.tryApply(BandwidthPolicyRates(downloadBps: 5_000_000, uploadBps: nil)))
+        XCTAssertEqual(report.attempts.map(\.mechanism), ["pf", "dummynet", "sysctl"])
+        XCTAssertEqual(report.downloadBps, 5_000_000)
+        XCTAssertNil(report.uploadBps)
+        // Aucune règle n'est posée : rien n'est jamais annoncé appliqué.
+        XCTAssertFalse(report.applied)
+        XCTAssertFalse(KernelShaper.version.isEmpty)
+    }
+
+    func testARefusalReportIsReadable() throws {
+        let json = """
+        {"version":"0.1.0","download_bps":1000000,"upload_bps":null,"sharing_interface":"bridge100",\
+        "applied":false,"system_allows":false,"summary":"iOS a refusé.","attempts":[{"mechanism":"pf",\
+        "title":"Filtre de paquets (pf)","outcome":"refused","code":"EPERM","message":"Refusé."}]}
+        """
+        let report = try XCTUnwrap(KernelShaper.decode(json))
+        XCTAssertEqual(report.sharingInterface, "bridge100")
+        XCTAssertEqual(report.attempts.first?.outcome, .refused)
+        XCTAssertEqual(report.attempts.first?.code, "EPERM")
+        XCTAssertEqual(LimiterView.title(for: .refused), "Refusé")
+        XCTAssertEqual(LimiterView.title(for: .accepted), "Accordé")
+    }
+
     func testAChangeOfVolumeIsSaidPlainly() {
         func comparison(_ percent: Double?, now: UInt64 = 0, before: UInt64 = 0) -> UsageComparison {
             UsageComparison(

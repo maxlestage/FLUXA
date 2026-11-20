@@ -1,9 +1,9 @@
-# L'app iOS, en Swift : la logique (FluxaCore) est testée sous Linux et macOS, puis
-# l'app est compilée pour le simulateur, testée écran par écran (tests d'interface),
-# et une capture de chaque écran est gardée.
+# L'app iOS : la logique (FluxaCore, en Swift) et le module de tentative d'application
+# (Shaper, en Rust) sont testés sous Linux et macOS, puis l'app est compilée pour le
+# simulateur, testée écran par écran (tests d'interface), et une capture de chaque écran
+# est gardée.
 #
-# Aucune signature ici : la publication (TestFlight, App Store) demande un compte
-# développeur Apple et se fait depuis Xcode.
+# Aucune signature ici : l'envoi sur TestFlight se fait avec ios-release.yml.
 
 name: iOS
 
@@ -41,6 +41,9 @@ jobs:
       - name: Test
         working-directory: ios/FluxaCore
         run: swift test
+      - name: Test the Rust shaper
+        working-directory: ios/Shaper
+        run: cargo test --locked && cargo clippy --locked --all-targets -- -D warnings
 
   app:
     name: App (iOS simulator)
@@ -52,6 +55,9 @@ jobs:
         run: xcodebuild -version
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Build the Rust shaper (C ABI)
+        working-directory: ios
+        run: ./Shaper/build-xcframework.sh
       - name: Generate the Xcode project
         working-directory: ios
         run: xcodegen generate
