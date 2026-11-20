@@ -1,0 +1,4 @@
+module FluxaShaper {
+    header "fluxa_shaper.h"
+    export *
+}

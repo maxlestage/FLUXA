@@ -1,8 +1,10 @@
 import FluxaCore
 import SwiftUI
 
-/// Le limiteur : régler un plafond, voir son effet simulé, l'enregistrer. Sur iPhone,
-/// le statut reste « Simulé » : rien n'est appliqué au partage de connexion.
+/// Le limiteur : régler un plafond, voir son effet simulé, l'enregistrer, et tenter de
+/// l'appliquer au partage de connexion par le module Rust `fluxa-shaper`. Le statut ne
+/// passe à « Appliqué » que si le système confirme une règle posée : sur iPhone, il
+/// reste « Simulé ».
 struct LimiterView: View {
     @Environment(AppModel.self) private var model
 
@@ -12,6 +14,8 @@ struct LimiterView: View {
     @State private var uploadPosition = LimiterView.position(forMbps: 10)
     @State private var mode = LimitMode.hardLimit
     @State private var duration = Span.unlimited
+    @State private var attempt: KernelShaper.Report?
+    @State private var attemptFailed = false
 
     /// Les durées proposées, d'une minute à sans limite de temps.
     enum Span: UInt64, CaseIterable, Identifiable {
@@ -95,6 +99,51 @@ struct LimiterView: View {
             }
 
             Section {
+                Button {
+                    attempt = KernelShaper.tryApply(
+                        BandwidthPolicyRates(downloadBps: policy.downloadBps, uploadBps: policy.uploadBps))
+                    attemptFailed = attempt == nil
+                } label: {
+                    Label("Tenter d’appliquer au partage", systemImage: "bolt.horizontal")
+                }
+                .disabled(problem != nil)
+                .accessibilityIdentifier("tenter-application")
+                if let attempt {
+                    ForEach(attempt.attempts) { step in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(step.title)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 12)
+                                StatusPill(LimiterView.pill(for: step.outcome), LimiterView.title(for: step.outcome))
+                            }
+                            Text(step.message)
+                                .font(.footnote)
+                                .foregroundStyle(Theme.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                    LabeledContent("Interface du partage") {
+                        Text(attempt.sharingInterface ?? "Absente")
+                            .font(.body.monospaced())
+                    }
+                    Text(attempt.summary)
+                        .font(.footnote)
+                        .foregroundStyle(attempt.applied ? Theme.ok : Theme.reserved)
+                        .accessibilityIdentifier("bilan-tentative")
+                }
+                if attemptFailed {
+                    Text("Le module de tentative n’a pas répondu.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.reserved)
+                }
+            } header: {
+                Text("Tentative auprès d’iOS")
+            } footer: {
+                Text("FLUXA essaie les mécanismes du noyau qui brident le réseau (pf, dummynet, sysctl) et affiche la réponse du système à chacun. Le plafond n’est annoncé appliqué que si le système confirme une règle posée.")
+            }
+
+            Section {
                 Button("Enregistrer la limite") {
                     model.apply(policy)
                 }
@@ -114,6 +163,22 @@ struct LimiterView: View {
         .fluxaBackground()
         .navigationTitle("Limiteur de débit")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    static func pill(for outcome: KernelShaper.Report.Attempt.Outcome) -> StatusPill.Kind {
+        switch outcome {
+        case .accepted: .supported
+        case .refused: .reserved
+        case .missing: .guide
+        }
+    }
+
+    static func title(for outcome: KernelShaper.Report.Attempt.Outcome) -> String {
+        switch outcome {
+        case .accepted: "Accordé"
+        case .refused: "Refusé"
+        case .missing: "Absent"
+        }
     }
 
     // L'échelle des curseurs : 0 vaut 0,1 Mb/s, 1 vaut 1 000 Mb/s, en progression logarithmique.
