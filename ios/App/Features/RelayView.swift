@@ -36,9 +36,16 @@ struct RelayView: View {
                         .font(.footnote)
                         .foregroundStyle(Theme.reserved)
                 }
-                Toggle("Garder l’écran allumé", isOn: $model.keepsScreenOnForRelay)
+                if let notice = model.relayNotice {
+                    Text(notice)
+                        .font(.footnote)
+                        .foregroundStyle(Theme.up)
+                }
+                if model.relayIsRunning, !model.relayRunsInBackground {
+                    Toggle("Garder l’écran allumé", isOn: $model.keepsScreenOnForRelay)
+                }
             } footer: {
-                Text("Le relais fonctionne tant que FLUXA est ouvert : iOS suspend les apps en arrière-plan. Il se rouvre à votre retour.")
+                Text(RelayText.runningNote(inBackground: model.relayRunsInBackground, running: model.relayIsRunning))
             }
 
             Section {
@@ -190,6 +197,17 @@ enum RelayText {
             return "Sans plafond"
         }
         return "↓ \(Format.cap(policy.downloadBps)) · ↑ \(Format.cap(policy.uploadBps))"
+    }
+
+    /// Où tourne le relais, et ce que cela change.
+    static func runningNote(inBackground: Bool, running: Bool) -> String {
+        if inBackground {
+            return "Le relais tourne en arrière-plan dans une extension réseau, signalée par l’icône VPN. Ce « VPN » ne transporte aucun trafic de l’iPhone : il garde seulement le relais en service."
+        }
+        if running {
+            return "Le relais tourne dans l’app : il s’arrête quand FLUXA passe en arrière-plan et se rouvre à votre retour."
+        }
+        return "À la première ouverture, iOS demande d’autoriser la configuration du relais : elle le garde en service quand FLUXA est en arrière-plan."
     }
 
     static func connections(_ count: Int) -> String {
