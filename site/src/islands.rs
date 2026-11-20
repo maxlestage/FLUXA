@@ -62,7 +62,7 @@ pub fn menu(props: &str) -> Node {
                     a().class("btn btn--primary btn--sm")
                         .href(format!("{prefix}#telecharger"))
                         .on_click(move |_| open.set(false))
-                        .text("Bientôt sur l’App Store"),
+                        .text("Disponibilité"),
                 ),
         )
         .into()
