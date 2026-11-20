@@ -2,9 +2,8 @@
 # Actions → iOS release → Run workflow.
 #
 # Avant le premier lancement :
-#   1. enregistrer l'identifiant de l'app (developer.apple.com → Certificates,
-#      Identifiers & Profiles → Identifiers), puis créer l'app dans App Store Connect
-#      avec cet identifiant ;
+#   1. créer l'app dans App Store Connect avec l'identifiant ci-dessous (le premier
+#      lancement l'enregistre et dit quoi faire) ;
 #   2. créer une clé d'API d'équipe App Store Connect (Utilisateurs et accès →
 #      Intégrations → API App Store Connect), avec le rôle « Admin » : la signature
 #      automatique crée le certificat de distribution, ce que les rôles plus restreints
@@ -14,10 +13,10 @@
 #        - secret ASC_ISSUER_ID   l'identifiant de l'émetteur
 #        - secret ASC_KEY         le contenu du fichier .p8 (ASC_PRIVATE_KEY est aussi lu)
 #
-# L'identifiant de l'app et celui de l'équipe sont retrouvés dans App Store Connect avec
-# la clé : l'app créée à l'étape 1 (celle dont le nom contient « FLUXA » s'il y en a
-# plusieurs), et le préfixe de son identifiant, qui est l'identifiant de l'équipe. Les
-# variables APPLE_TEAM_ID et IOS_BUNDLE_ID, si elles existent, passent avant.
+# L'identifiant de l'app est com.maxlestage.fluxa, ou la variable IOS_BUNDLE_ID si elle
+# existe. Le workflow l'enregistre sur le compte développeur s'il ne l'est pas, et en tire
+# l'identifiant de l'équipe (ou la variable APPLE_TEAM_ID). L'app elle-même se crée une
+# fois à la main dans App Store Connect : l'API ne le permet pas.
 
 name: iOS release
 
@@ -38,7 +37,7 @@ jobs:
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_PRIVATE_KEY: ${{ secrets.ASC_KEY || secrets.ASC_PRIVATE_KEY }}
       TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
-      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID }}
+      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'com.maxlestage.fluxa' }}
     steps:
       - uses: actions/checkout@v4
       - name: Check the configuration
