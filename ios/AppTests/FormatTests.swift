@@ -319,6 +319,56 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(LimiterView.title(for: .accepted), "Accordé")
     }
 
+    // MARK: Relais de partage
+
+    func testTheRelayOpensAndClosesThroughTheCABI() throws {
+        XCTAssertEqual(RelayBridge.start(allowLoopback: true), 0)
+        defer { RelayBridge.stop() }
+        RelayBridge.setLimit(downloadBps: 8_000_000, uploadBps: nil)
+        XCTAssertEqual(RelayBridge.setDeviceLimit(address: "172.20.10.3", downloadBps: 800_000, uploadBps: nil), 0)
+        XCTAssertNotEqual(RelayBridge.setDeviceLimit(address: "pas une adresse", downloadBps: 1, uploadBps: 1), 0)
+        let status = try XCTUnwrap(RelayBridge.status())
+        XCTAssertTrue(status.running)
+        XCTAssertEqual(status.port, RelayBridge.port)
+        XCTAssertEqual(status.downloadLimit, 1_000_000, "octets par seconde")
+        XCTAssertEqual(status.uploadLimit, 0)
+        RelayBridge.stop()
+        XCTAssertEqual(RelayBridge.status()?.running, false)
+    }
+
+    func testRelayRatesComeFromTwoReadings() {
+        func client(_ down: UInt64, _ up: UInt64) -> RelayStatus.Client {
+            RelayStatus.Client(
+                address: "172.20.10.3", connections: 1, toDeviceBytes: down, fromDeviceBytes: up,
+                idleSeconds: 0, downloadLimit: 0, uploadLimit: 0)
+        }
+        let rate = RelayRate.between(client(1_000_000, 10_000), client(2_250_000, 60_000), seconds: 2)
+        XCTAssertEqual(rate.toDeviceBps, 5_000_000)
+        XCTAssertEqual(rate.fromDeviceBps, 200_000)
+        // Premier relevé, ou compteurs repartis de zéro : pas de débit inventé.
+        XCTAssertNil(RelayRate.between(nil, client(5, 5), seconds: 1).toDeviceBps)
+        XCTAssertNil(RelayRate.between(client(9, 9), client(5, 5), seconds: 1).toDeviceBps)
+    }
+
+    func testTheRelayStatusIsReadable() throws {
+        let json = """
+        {"running":true,"port":8888,"download_limit":625000,"upload_limit":0,"addresses":["172.20.10.1"],\
+        "clients":[{"address":"172.20.10.3","connections":2,"to_device_bytes":1200,"from_device_bytes":300,\
+        "idle_seconds":0.4,"download_limit":0,"upload_limit":0}]}
+        """
+        let status = try XCTUnwrap(RelayStatus.decode(json))
+        XCTAssertEqual(status.address, "172.20.10.1")
+        XCTAssertEqual(status.clients?.first?.toDeviceBytes, 1_200)
+        XCTAssertEqual(RelayStatus.decode("{\"running\":false}")?.running, false)
+        XCTAssertEqual(RelayStatus.decode("{\"running\":false}")?.address, RelayBridge.defaultAddress)
+        XCTAssertEqual(RelayText.pacURL(address: "172.20.10.1"), "http://172.20.10.1:8888/proxy.pac")
+        XCTAssertEqual(RelayText.cap(nil), "Sans plafond")
+        XCTAssertEqual(RelayText.cap(BandwidthPolicy(downloadBps: 5_000_000)), "↓ 5\(space)Mb/s · ↑ Sans plafond")
+        XCTAssertEqual(RelayText.connections(0), "inactif")
+        XCTAssertEqual(RelayText.connections(2), "2 connexions")
+        XCTAssertTrue(AppModel.relayProblem(EADDRINUSE).contains("8888"))
+    }
+
     func testAChangeOfVolumeIsSaidPlainly() {
         func comparison(_ percent: Double?, now: UInt64 = 0, before: UInt64 = 0) -> UsageComparison {
             UsageComparison(

@@ -7,7 +7,7 @@ logique. La tentative d'application d'un plafond au partage de connexion est un 
 | Chemin | Rôle |
 | --- | --- |
 | `FluxaCore/` | la logique, testée sans l'interface sous Linux et macOS : débit, latence, profils, limites et simulation, automatisations, appareils, historique, volume par réseau, rattrapage hors de l'app, forfait mobile, sessions de partage, stockage SQLite |
-| `Shaper/` | le module Rust `fluxa-shaper` (ABI C, `include/fluxa_shaper.h`) : il tente d'appliquer le plafond par les mécanismes du noyau (pf, dummynet, sysctl) et rapporte la réponse du système |
+| `Shaper/` | le module Rust `fluxa-shaper` (ABI C, `include/fluxa_shaper.h`) : le relais de partage (mandataire qui plafonne et compte le trafic des appareils reliés), et la tentative par les mécanismes du noyau (pf, dummynet, sysctl) |
 | `App/` | l'app SwiftUI et l'accès au système (`App/Services/`) |
 | `AppTests/` | les règles de l'interface : écriture des mesures, échelles, résumés |
 | `AppUITests/` | l'app lancée dans le simulateur et manipulée écran par écran |
@@ -93,6 +93,26 @@ le plafond ne serait pas annoncé comme appliqué.
 
 Les mesures et les règles ne tournent que lorsque l'app est ouverte : iOS la suspend en
 arrière-plan.
+
+## Le relais de partage
+
+iOS ne laisse aucune app brider le partage de connexion par le système. Le relais contourne cette
+limite sans jailbreak : FLUXA ouvre sur l'iPhone un mandataire HTTP, HTTPS et SOCKS5 (port 8888,
+module Rust `Shaper/src/relay.rs`). Chaque appareil relié règle une fois son mandataire sur la
+configuration automatique `http://172.20.10.1:8888/proxy.pac`. Son trafic passe alors par FLUXA,
+qui le plafonne pour de vrai (un plafond global, et un plafond par appareil) et le mesure appareil
+par appareil.
+
+Ce qu'il faut savoir :
+
+- seul le trafic qui passe par le relais est plafonné : un appareil qui retire le réglage, ou une
+  app qui ignore le mandataire (UDP, certains jeux), y échappe. Le statut affiché est donc
+  « Partiel », jamais « Appliqué » ;
+- le relais tourne tant que FLUXA est au premier plan (iOS suspend les apps en arrière-plan) ;
+  l'écran peut rester allumé. Si FLUXA est fermé, la configuration automatique renvoie l'appareil
+  en direct : il garde sa connexion, sans plafond ;
+- le relais ne sert que les appareils du partage (réseau 172.20.10.0/28 et interfaces de pont) :
+  ce n'est jamais un mandataire ouvert sur un Wi-Fi public.
 
 ## Ce que l'app compte quand elle est fermée
 
