@@ -4,6 +4,8 @@
   seule ligne ou sans ses lignes BEGIN et END.
 - Enregistre l'identifiant de l'app (BUNDLE_ID) sur le compte développeur s'il ne l'est
   pas encore, et en tire l'identifiant de l'équipe (le préfixe seedId) si TEAM_ID manque.
+- Enregistre l'identifiant de l'extension du relais (BUNDLE_ID.relay) et active les
+  extensions réseau sur les deux identifiants.
 - Vérifie que l'app existe dans App Store Connect : une app ne peut pas y être créée par
   l'API, il faut le faire une fois à la main.
 
@@ -59,7 +61,7 @@ def token(pem: str) -> str:
         raise
 
 
-def call(path: str, bearer: str, body: dict | None = None) -> list | dict:
+def call(path: str, bearer: str, body: dict | None = None, tolerate: tuple[int, ...] = ()) -> list | dict | None:
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(
         API + path,
@@ -71,6 +73,8 @@ def call(path: str, bearer: str, body: dict | None = None) -> list | dict:
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.load(response)["data"]
     except urllib.error.HTTPError as error:
+        if error.code in tolerate:
+            return None
         if error.code == 401:
             fail(
                 "App Store Connect refuse la clé (401). Vérifiez ASC_KEY_ID, ASC_ISSUER_ID et ASC_KEY : "
@@ -82,7 +86,7 @@ def call(path: str, bearer: str, body: dict | None = None) -> list | dict:
         raise
 
 
-def bundle_record(bundle_id: str, bearer: str) -> dict:
+def bundle_record(bundle_id: str, bearer: str, name: str = "FLUXA") -> dict:
     """L'identifiant sur le compte développeur, enregistré au besoin."""
     query = urllib.parse.urlencode({"filter[identifier]": bundle_id, "fields[bundleIds]": "identifier,seedId"})
     for item in call(f"/v1/bundleIds?{query}", bearer):
@@ -92,7 +96,24 @@ def bundle_record(bundle_id: str, bearer: str) -> dict:
     return call(
         "/v1/bundleIds",
         bearer,
-        {"data": {"type": "bundleIds", "attributes": {"identifier": bundle_id, "name": "FLUXA", "platform": "IOS"}}},
+        {"data": {"type": "bundleIds", "attributes": {"identifier": bundle_id, "name": name, "platform": "IOS"}}},
+    )
+
+
+def enable_network_extensions(record: dict, bearer: str) -> None:
+    """Active les extensions réseau sur l'identifiant (le relais en arrière-plan). Une
+    capacité déjà active fait répondre 409 : rien à faire."""
+    call(
+        "/v1/bundleIdCapabilities",
+        bearer,
+        {
+            "data": {
+                "type": "bundleIdCapabilities",
+                "attributes": {"capabilityType": "NETWORK_EXTENSIONS"},
+                "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": record["id"]}}},
+            }
+        },
+        tolerate=(409,),
     )
 
 
@@ -115,6 +136,10 @@ def main() -> None:
     record = bundle_record(bundle_id, bearer)
     team_id = os.environ.get("TEAM_ID", "").strip() or record["attributes"]["seedId"]
     check_app(bundle_id, bearer)
+    # L'extension du relais a son propre identifiant ; les deux portent les extensions réseau.
+    relay = bundle_record(f"{bundle_id}.relay", bearer, name="FLUXA Relais")
+    for item in (record, relay):
+        enable_network_extensions(item, bearer)
     with open(os.environ["GITHUB_ENV"], "a") as env:
         env.write(f"BUNDLE_ID={bundle_id}\nTEAM_ID={team_id}\n")
     # L'identifiant de l'équipe est masqué dans le journal public.
