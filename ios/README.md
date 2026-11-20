@@ -1,11 +1,13 @@
 # FLUXA pour iPhone
 
 L'app est écrite en Swift natif : SwiftUI pour l'interface, un paquet Swift (`FluxaCore`) pour la
-logique. iOS 17 au minimum.
+logique. La tentative d'application d'un plafond au partage de connexion est un module Rust
+(`Shaper/`), lié à l'app par son ABI C. iOS 17 au minimum.
 
 | Chemin | Rôle |
 | --- | --- |
 | `FluxaCore/` | la logique, testée sans l'interface sous Linux et macOS : débit, latence, profils, limites et simulation, automatisations, appareils, historique, volume par réseau, rattrapage hors de l'app, forfait mobile, sessions de partage, stockage SQLite |
+| `Shaper/` | le module Rust `fluxa-shaper` (ABI C, `include/fluxa_shaper.h`) : il tente d'appliquer le plafond par les mécanismes du noyau (pf, dummynet, sysctl) et rapporte la réponse du système |
 | `App/` | l'app SwiftUI et l'accès au système (`App/Services/`) |
 | `AppTests/` | les règles de l'interface : écriture des mesures, échelles, résumés |
 | `AppUITests/` | l'app lancée dans le simulateur et manipulée écran par écran |
@@ -20,10 +22,13 @@ cd FluxaCore && swift test
 
 Sous Linux, il faut les en-têtes de SQLite : `sudo apt-get install libsqlite3-dev`.
 
+Le module Rust se teste aussi sans Xcode : `cd Shaper && cargo test`.
+
 ## Ouvrir le projet
 
 ```sh
 brew install xcodegen
+./Shaper/build-xcframework.sh   # le module Rust, pour l'iPhone et le simulateur (rustup requis)
 xcodegen generate
 open Fluxa.xcodeproj
 ```
@@ -78,6 +83,13 @@ Pour les captures d'écran et les tests :
 iOS réserve au système l'activation du partage de connexion, la limitation de son débit, la liste
 des appareils reliés et leur déconnexion. Un plafond réglé dans l'app est enregistré et simulé sur
 le débit mesuré ; son statut reste « Simulé », jamais « Appliqué ».
+
+Le bouton « Tenter d'appliquer au partage » du limiteur appelle le module Rust, qui essaie les
+mécanismes du noyau qui brident le réseau : ouvrir le filtre de paquets `/dev/pf`, ouvrir une
+socket brute (les files `dummynet`), réécrire un réglage `sysctl` avec sa valeur actuelle. Rien
+n'est modifié. Sur un iPhone, le bac à sable des apps les refuse, et l'écran affiche le refus de
+chacun avec son code (`EPERM`, `EACCES`). Même si une voie s'ouvrait, aucune règle n'est posée :
+le plafond ne serait pas annoncé comme appliqué.
 
 Les mesures et les règles ne tournent que lorsque l'app est ouverte : iOS la suspend en
 arrière-plan.

@@ -1,0 +1,22 @@
+[package]
+name = "fluxa-shaper"
+version = "0.1.0"
+edition = "2021"
+description = "Tentative d'application d'un plafond de débit au partage de connexion, par les mécanismes du noyau, exposée par l'ABI C."
+publish = false
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# Une crate à part, hors de tout espace de travail.
+[workspace]
