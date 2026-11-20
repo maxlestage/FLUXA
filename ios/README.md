@@ -54,9 +54,12 @@ programme développeur.
 
 ## Envoyer sur TestFlight
 
-Le workflow `.github/workflows/ios-release.yml` archive l'app et l'envoie sur TestFlight. Il se
-lance à la main et n'a encore jamais tourné : son en-tête liste la clé d'API et les réglages à
-fournir. Sans eux, il s'arrête en le disant.
+Le workflow `.github/workflows/ios-release.yml` archive l'app et l'envoie sur TestFlight, sans Mac.
+Il se lance à la main (Actions → iOS release → Run workflow) et demande trois secrets GitHub, tirés
+d'une clé d'API App Store Connect au rôle Admin : `ASC_KEY_ID`, `ASC_ISSUER_ID` et `ASC_KEY` (le
+contenu du fichier `.p8`). L'identifiant de l'app et celui de l'équipe sont retrouvés dans App Store
+Connect par `Config/appstoreconnect.py` ; l'app doit y avoir été créée. Son en-tête détaille les
+étapes.
 
 ## Lancer l'app sur un écran donné
 
