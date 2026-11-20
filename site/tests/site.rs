@@ -29,8 +29,8 @@ async fn serves_the_home_page() {
         );
     }
     assert!(html.contains("42,8"));
-    // Douze fonctions, chacune avec son ancre, et un pied de page complet.
-    assert_eq!(html.matches(r#"class="feat""#).count(), 12);
+    // Treize fonctions, chacune avec son ancre, et un pied de page complet.
+    assert_eq!(html.matches(r#"class="feat""#).count(), 13);
     assert_eq!(html.matches(r#"class="fcol""#).count(), 6);
     // iOS seulement.
     assert!(!html.to_lowercase().contains("android"));
@@ -198,4 +198,35 @@ async fn the_service_worker_keeps_the_site_for_offline() {
         let path = url.split('?').next().unwrap();
         assert_eq!(client.get(path).await.status(), 200, "{url}");
     }
+}
+
+/// Le site ne promet rien que l'app ne fait pas : ces phrases ont été vraies ou prévues,
+/// elles ne le sont plus. Une fonction qui revient doit revenir dans l'app d'abord.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_site_does_not_lie() {
+    let client = client().await;
+    for path in ["/", "/confidentialite/", "/mentions-legales/"] {
+        let html = client.get(path).await.text();
+        for claim in [
+            "Bientôt sur l’App Store",
+            "Bientôt disponible",
+            "saturations",
+            "par semaine",
+            "détecte ce que votre iPhone",
+            "durée que vous réglez",
+            "durée réglable",
+            "VPN local facultatif",
+            "deux échanges, et seulement de ceux-là",
+            "de l’interface au moteur",
+            "n’annonce que ce que le système confirme",
+        ] {
+            assert!(!html.contains(claim), "{path} affirme encore : {claim}");
+        }
+    }
+    let home = client.get("/").await.text();
+    // Le relais est décrit avec son vrai statut, et la disponibilité réelle est dite.
+    assert!(home.contains("id=\"f-relais\""));
+    assert!(home.contains("Partiel"));
+    assert!(home.contains("bêta privée"));
+    assert!(home.contains("Pas encore sur l’App Store") || home.contains("pas encore sur l’App Store"));
 }
