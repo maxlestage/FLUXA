@@ -36,6 +36,26 @@ struct HotspotGuideView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        RelayView()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Label("Relais de partage", systemImage: "arrow.left.arrow.right.circle")
+                                Spacer()
+                                if model.relayIsRunning {
+                                    StatusPill(.supported, "En service")
+                                }
+                            }
+                            Text("Plafonnez et suivez, appareil par appareil, le trafic des appareils reliés qui passent par FLUXA.")
+                                .font(.footnote)
+                                .foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("lien-relais")
+                }
+
+                Section {
                     LabeledContent("État") {
                         if model.sharingDetected {
                             StatusPill(.supported, "Détecté")

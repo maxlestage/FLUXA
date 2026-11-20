@@ -60,6 +60,15 @@ final class FluxaUITests: XCTestCase {
         return XCTWaiter().wait(for: [waiting], timeout: timeout) == .completed
     }
 
+    /// Allume un interrupteur, en touchant le bouton lui-même si la ligne ne suffit pas.
+    private func turnOn(_ toggle: XCUIElement) {
+        if (toggle.value as? String) == "1" { return }
+        toggle.tap()
+        if (toggle.value as? String) != "1" {
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        }
+    }
+
     /// Referme le clavier par le bouton de sa barre, s'il est affiché.
     private func closeKeyboard() {
         let done = app.buttons["Terminé"]
@@ -385,6 +394,42 @@ final class FluxaUITests: XCTestCase {
         assertNoError()
     }
 
+    // MARK: Relais de partage
+
+    func testTheRelayCarriesAndCountsADevicesTraffic() {
+        launch(["-fluxaScreen", "relais"])
+        XCTAssertTrue(app.navigationBars["Relais de partage"].waitForExistence(timeout: 30))
+        let toggle = app.switches["interrupteur-relais"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10))
+        turnOn(toggle)
+        XCTAssertTrue(element(containing: "En service").waitForExistence(timeout: 10))
+        XCTAssertTrue(element(containing: "proxy.pac").exists)
+
+        // Un appareil relié : le lanceur de tests, qui passe par le relais (boucle locale).
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.connectionProxyDictionary = [
+            "HTTPEnable": 1, "HTTPProxy": "127.0.0.1", "HTTPPort": 8888,
+            "HTTPSEnable": 1, "HTTPSProxy": "127.0.0.1", "HTTPSPort": 8888,
+        ]
+        let answered = expectation(description: "page relayée")
+        let result = Box()
+        URLSession(configuration: configuration).dataTask(with: URL(string: "https://www.apple.com/")!) { data, response, _ in
+            result.status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            result.bytes = data?.count ?? 0
+            answered.fulfill()
+        }.resume()
+        wait(for: [answered], timeout: 30)
+        XCTAssertEqual(result.status, 200)
+        XCTAssertGreaterThan(result.bytes, 0)
+
+        // L'appareil apparaît, avec son trafic relayé.
+        let device = app.descendants(matching: .any)["appareil-relaye"].firstMatch
+        XCTAssertTrue(scroll(to: device))
+        XCTAssertTrue(element(containing: "127.0.0.1").exists)
+        XCTAssertFalse(element(containing: "Relayé : ↓ 0").exists)
+        assertNoError()
+    }
+
     // MARK: Historique, réglages, diagnostic
 
     func testTheHistoryShowsItsSummary() {
@@ -428,4 +473,10 @@ final class FluxaUITests: XCTestCase {
         XCTAssertTrue(element(containing: "Mesurer la connexion").waitForExistence(timeout: 5))
         XCTAssertTrue(scroll(to: element(containing: "internet_monitoring"), swipes: 12))
     }
+}
+
+/// Un résultat rempli par une tâche réseau, lu par le test.
+private final class Box: @unchecked Sendable {
+    var status = 0
+    var bytes = 0
 }
