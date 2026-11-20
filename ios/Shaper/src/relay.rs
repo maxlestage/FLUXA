@@ -225,8 +225,9 @@ impl Relay {
     /// Ouvre le relais sur ce port (0 : un port libre). `allow_loopback` sert aussi la
     /// boucle locale : pour les tests, et pour le simulateur.
     pub fn start(port: u16, allow_loopback: bool) -> io::Result<Relay> {
+        // Une attente bloquante : le fil d'accueil dort jusqu'à la prochaine connexion,
+        // au lieu de se réveiller sans cesse. Utile en arrière-plan, dans l'extension.
         let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port))?;
-        listener.set_nonblocking(true)?;
         let port = listener.local_addr()?.port();
         let shared = Arc::new(Shared {
             stop: AtomicBool::new(false),
@@ -325,6 +326,12 @@ impl Relay {
             let _ = socket.shutdown(Shutdown::Both);
         }
         if let Some(accept) = self.accept.take() {
+            // Le fil d'accueil attend une connexion : une connexion locale le réveille, il
+            // voit l'arrêt demandé et referme l'écoute.
+            let _ = TcpStream::connect_timeout(
+                &SocketAddr::from((Ipv4Addr::LOCALHOST, self.port)),
+                Duration::from_secs(1),
+            );
             let _ = accept.join();
         }
     }
@@ -340,7 +347,8 @@ fn accept_loop(shared: &Arc<Shared>, listener: &TcpListener) {
     while !shared.stop.load(Ordering::Relaxed) {
         match listener.accept() {
             Ok((stream, peer)) => {
-                if !shared.allows(peer.ip()) || stream.set_nonblocking(false).is_err() {
+                // La connexion qui réveille l'arrêt, ou un appareil hors du partage.
+                if shared.stop.load(Ordering::Relaxed) || !shared.allows(peer.ip()) {
                     continue;
                 }
                 let serving = Arc::clone(shared);
@@ -348,7 +356,9 @@ fn accept_loop(shared: &Arc<Shared>, listener: &TcpListener) {
                     .name("fluxa-relay-connection".into())
                     .spawn(move || serve(&serving, stream, peer));
             }
-            Err(_) => thread::sleep(Duration::from_millis(40)),
+            // Une erreur d'accueil (trop de descripteurs ouverts, écoute coupée par le
+            // système) : une courte pause avant de réessayer, sans tourner à vide.
+            Err(_) => thread::sleep(Duration::from_millis(200)),
         }
     }
 }
@@ -935,6 +945,28 @@ mod tests {
         assert!(sharing_networks()
             .iter()
             .any(|(address, _)| *address == Ipv4Addr::new(172, 20, 10, 1)));
+    }
+
+    #[test]
+    fn the_relay_sleeps_while_idle_and_stops_at_once() {
+        let mut relay = Relay::start(0, true).unwrap();
+        let port = relay.port();
+        // Au repos, le fil d'accueil attend : il ne se réveille pas pour rien.
+        thread::sleep(Duration::from_millis(300));
+        let started = Instant::now();
+        relay.stop();
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "arrêt trop lent : {:?}",
+            started.elapsed()
+        );
+        // L'écoute est refermée : plus personne n'est servi.
+        thread::sleep(Duration::from_millis(50));
+        let refused = TcpStream::connect_timeout(
+            &SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+            Duration::from_millis(500),
+        );
+        assert!(refused.is_err(), "le relais écoute encore après son arrêt");
     }
 
     #[test]
