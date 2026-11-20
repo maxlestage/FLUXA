@@ -29,6 +29,10 @@ targets:
       - path: App
     dependencies:
       - package: FluxaCore
+      # La tentative d'application du plafond, en Rust, liée par son ABI C
+      # (construite par Shaper/build-xcframework.sh avant xcodegen).
+      - framework: Shaper/FluxaShaper.xcframework
+        embed: false
     info:
       path: App/Info.plist
       properties:
