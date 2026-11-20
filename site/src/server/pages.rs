@@ -72,18 +72,22 @@ fn eyebrow(label: &'static str) -> Element {
     p().class("eyebrow").text(label)
 }
 
-/// Le pavé « Bientôt sur l'App Store » : une annonce, pas un lien.
+/// Le pavé de disponibilité : une bêta privée sur TestFlight, pas un lien. Aucune
+/// publication sur l'App Store n'est promise.
 fn store_badge() -> Element {
     div()
         .class("store")
         .attr("role", "img")
-        .attr("aria-label", "Bientôt disponible sur l’App Store")
+        .attr(
+            "aria-label",
+            "En bêta privée sur TestFlight, pas encore sur l’App Store",
+        )
         .child(span().class("store__icon").html(STORE_ICON))
         .child(
             span()
                 .class("store__txt")
-                .child(small().text("Bientôt sur"))
-                .child(strong().text("l’App Store")),
+                .child(small().text("Bêta privée"))
+                .child(strong().text("TestFlight")),
         )
 }
 
@@ -164,7 +168,7 @@ fn hero() -> Element {
             .child(
                 div()
                     .class("hero__copy")
-                    .child(eyebrow("Pour iPhone · V1 en développement"))
+                    .child(eyebrow("Pour iPhone · bêta privée sur TestFlight"))
                     .child(h1().id("titre").text("Votre connexion, mesurée à la seconde."))
                     .child(p().class("hero__lead").text(
                         "FLUXA suit le débit, la latence et la consommation de votre iPhone, garde vos profils de débit sous la main et vous guide pour partager votre connexion. Tout reste sur l’appareil.",
@@ -175,7 +179,7 @@ fn hero() -> Element {
                             .child(
                                 a().class("btn btn--primary")
                                     .href("#telecharger")
-                                    .text("Bientôt sur l’App Store"),
+                                    .text("Disponibilité"),
                             )
                             .child(
                                 a().class("btn btn--ghost")
@@ -234,6 +238,7 @@ fn cadence() -> Element {
 
 const OK: (&str, &str) = ("pill--ok", "Pris en charge");
 const SIMULATED: (&str, &str) = ("pill--sim", "Simulé");
+const PARTIAL: (&str, &str) = ("pill--sim", "Partiel");
 const GUIDE: (&str, &str) = ("pill--sys", "Guide");
 const RESERVED: (&str, &str) = ("pill--no", "Réservé à iOS");
 
@@ -247,7 +252,7 @@ struct Feature {
     meta: &'static str,
 }
 
-const FEATURES: [Feature; 12] = [
+const FEATURES: [Feature; 13] = [
     Feature {
         id: "f-tableau",
         name: "Tableau de bord",
@@ -259,7 +264,7 @@ const FEATURES: [Feature; 12] = [
         id: "f-test",
         name: "Test de débit",
         status: OK,
-        text: "Lancez une mesure quand vous voulez et retrouvez-la dans l’historique, à côté des précédentes.",
+        text: "Lancez une mesure quand vous voulez et retrouvez-la à côté des précédentes. Sur un réseau facturé à l’usage, l’app demande confirmation avant.",
         meta: "À la demande",
     },
     Feature {
@@ -291,6 +296,13 @@ const FEATURES: [Feature; 12] = [
         meta: "Activation dans Réglages iOS",
     },
     Feature {
+        id: "f-relais",
+        name: "Relais de partage",
+        status: PARTIAL,
+        text: "Les appareils reliés qui règlent leur proxy sur FLUXA passent par son relais : leur trafic est réellement plafonné, globalement ou appareil par appareil, et compté pour chacun. Une extension réseau le garde en service en arrière-plan.",
+        meta: "Seul le trafic relayé est plafonné",
+    },
+    Feature {
         id: "f-appareils",
         name: "Mes appareils",
         status: OK,
@@ -308,29 +320,29 @@ const FEATURES: [Feature; 12] = [
         id: "f-limiteur",
         name: "Limiteur de débit",
         status: SIMULATED,
-        text: "Réglez un plafond dans chaque sens. Sur iPhone, FLUXA en simule l’effet sur votre débit mesuré et ne l’annonce jamais comme appliqué au partage.",
+        text: "Réglez un plafond dans chaque sens et voyez son effet sur votre débit mesuré. iOS ne laisse aucune app brider le partage lui-même : sans le relais, le plafond reste simulé.",
         meta: "De 0,1 à 1 000 Mb/s",
     },
     Feature {
         id: "f-historique",
         name: "Historique",
         status: OK,
-        text: "Débit et consommation par heure, par jour et par semaine, avec les pics et les saturations repérés.",
+        text: "Débit et consommation sur une heure, un jour ou trente jours, avec les pics, le volume par réseau et la comparaison avec la période précédente. Export en CSV.",
         meta: "Agrégé chaque minute",
     },
     Feature {
         id: "f-automatisations",
         name: "Automatisations",
         status: OK,
-        text: "Une alerte après un seuil de consommation, un profil selon l’heure, le retour au profil précédent après une durée.",
+        text: "Une alerte ou un profil quand le volume du jour ou le forfait atteint un seuil, ou selon l’heure. Le profil précédent revient à la fin de la plage, le lendemain ou au nouveau cycle.",
         meta: "Sur les données locales, pas sur le partage",
     },
     Feature {
         id: "f-diagnostic",
         name: "Centre de diagnostic",
         status: OK,
-        text: "Les capacités détectées sur votre iPhone, le journal du moteur et les erreurs, réunis au même endroit.",
-        meta: "Capacités vérifiées au démarrage",
+        text: "Ce qu’une app peut faire sur iPhone, le journal du moteur, l’emplacement de la base et les erreurs, réunis au même endroit.",
+        meta: "Selon les règles d’iOS",
     },
 ];
 
@@ -453,7 +465,7 @@ fn transparency() -> Element {
                     "h-transparence",
                     "Ce qu’iOS autorise, sans détour",
                     Some(
-                        "Le partage de connexion appartient à iOS. Apple ne l’ouvre pas aux apps, et FLUXA ne cherche pas à contourner cette règle.",
+                        "Le partage de connexion appartient à iOS : Apple ne l’ouvre pas aux apps. Le relais de FLUXA ne plafonne que le trafic des appareils qui passent par lui, et l’app le dit.",
                     ),
                 ))
                 .child(
@@ -463,7 +475,9 @@ fn transparency() -> Element {
                         .child(p().text(
                             "Aucune limitation de débit n’est annoncée comme effective tant que le système n’a pas confirmé son application.",
                         ))
-                        .child(footer().text("La règle que suit chaque écran de l’app")),
+                        .child(footer().text(
+                            "La règle que suit chaque écran de l’app. Le relais confirme lui-même le plafond qu’il pose : le statut est alors « Partiel », limité au trafic relayé.",
+                        )),
                 )
                 .child(
                     div()
@@ -476,9 +490,9 @@ fn transparency() -> Element {
                                 ("Tester le débit Internet", "pill--ok", "Oui"),
                                 ("Tracer les graphiques et l’historique", "pill--ok", "Oui"),
                                 ("Gérer des profils de débit", "pill--ok", "Oui, dans l’app"),
-                                ("Créer un VPN local facultatif", "pill--sim", "Sous conditions"),
+                                ("Plafonner les appareils réglés sur son relais", "pill--sim", "Partiel"),
                             ],
-                            "Le VPN local ne traite que le trafic de l’iPhone passé par le tunnel, jamais celui des appareils reliés au partage.",
+                            "Le relais tourne dans une extension réseau, signalée par l’icône VPN. Ce tunnel ne transporte aucun trafic de l’iPhone : il garde seulement le relais en service.",
                         ))
                         .child(capability_list(
                             "Ce qu’iOS garde pour lui",
@@ -492,14 +506,14 @@ fn transparency() -> Element {
                                     "Non garanti",
                                 ),
                             ],
-                            "Quand une information est inconnue, l’app l’indique. Elle n’invente ni nom d’appareil ni adresse MAC.",
+                            "L’app ne voit que les appareils qui passent par son relais, par leur adresse sur le partage. Elle n’invente ni nom d’appareil ni adresse MAC.",
                         )),
                 )
                 .child(
                     div()
                         .class("code")
                         .child(p().class("code__label").text(
-                            "Au démarrage, le moteur détecte ce que votre iPhone permet. L’interface n’affiche que ce qui en découle. Exemple illustratif :",
+                            "Le moteur décrit ce que le système permet à une app sur iPhone, au format du cahier des charges. Le relais n’y change rien : il agit à côté du système. Sortie du moteur :",
                         ))
                         .child(pre().child(code().html(capabilities_json()))),
                 ),
@@ -540,7 +554,7 @@ fn privacy_section() -> Element {
                                     ul().class("never")
                                         .child(commitment(
                                             "Aucun contenu de communication collecté",
-                                            "L’app compte des octets. Elle ne lit pas ce qu’ils transportent.",
+                                            "L’app compte des octets. Le relais transmet le trafic des appareils sans l’enregistrer ; pour le HTTPS, il ne voit que le nom du serveur.",
                                         ))
                                         .child(commitment(
                                             "Aucun mot de passe Wi-Fi enregistré",
@@ -587,7 +601,7 @@ fn privacy_section() -> Element {
                                     },
                                 )))
                                 .child(p().text(
-                                    "Barres à l’échelle d’une année. L’historique des profils suit une durée que vous réglez.",
+                                    "Barres à l’échelle d’une année. Le journal des limites garde les 500 dernières demandes.",
                                 ))
                                 .child(
                                     p().child(
@@ -639,9 +653,9 @@ fn technology() -> Element {
                 .child(section_head(
                     "Sous le capot",
                     "h-technologie",
-                    "Une app en Swift natif, de l’interface au moteur",
+                    "Swift natif pour l’app, Rust pour le relais",
                     Some(
-                        "L’interface est en SwiftUI. La logique de mesure et de règles vit dans un paquet Swift à part, testé sans l’interface. Tout ce qui touche au système passe par les API natives d’Apple.",
+                        "L’interface est en SwiftUI. La logique de mesure et de règles vit dans un paquet Swift à part, testé sans l’interface. Le relais de partage est un module Rust, appelé par son interface C et testé à part.",
                     ),
                 ))
                 .child(
@@ -733,24 +747,24 @@ fn technology() -> Element {
 fn roadmap() -> Element {
     let steps = [
         (
-            "Moteur réseau",
-            "Mesure du débit, de la latence et de la connectivité, historique et statistiques.",
+            "Moteur réseau · fait",
+            "Mesure du débit, de la latence et de la connectivité, historique, forfait et statistiques.",
         ),
         (
-            "Application iPhone",
-            "Tableau de bord, réseau, guide du partage, profils et historique en SwiftUI.",
+            "Application iPhone · faite",
+            "Tableau de bord, réseau, partage, forfait, profils et historique en SwiftUI.",
         ),
         (
-            "Profils, simulation et automatisations",
-            "Limites configurables, programmation, seuils et alertes.",
+            "Profils, relais et automatisations · faits",
+            "Plafonds simulés ou appliqués par le relais, plages horaires, seuils et alertes.",
         ),
         (
-            "Qualité et confidentialité",
-            "Tests sur iPhone réels en Wi-Fi, 4G et 5G, en arrière-plan et en mode économie d’énergie.",
+            "Essais sur iPhone réels · en cours",
+            "Wi-Fi, 4G et 5G, partage de connexion avec appareils reliés, arrière-plan, mode économie d’énergie.",
         ),
         (
-            "Bêta TestFlight, puis App Store",
-            "Une bêta ouverte aux premiers testeurs avant la publication.",
+            "Bêta TestFlight · privée, en cours",
+            "Une bêta pour les premiers testeurs. La publication sur l’App Store dépendra de la validation d’Apple.",
         ),
     ];
     section()
@@ -763,8 +777,8 @@ fn roadmap() -> Element {
                 .child(section_head(
                     "Feuille de route",
                     "h-route",
-                    "Le chemin jusqu’à l’App Store",
-                    Some("La V1 est en développement. Voici les étapes prévues, dans l’ordre."),
+                    "Où en est FLUXA",
+                    Some("La V1 est en bêta privée. Voici les étapes, dans l’ordre, avec leur état réel."),
                 ))
                 .child(ol().class("steps").children(
                     steps.map(|(step, detail)| li().child(h3().text(step)).child(p().text(detail))),
@@ -783,10 +797,10 @@ const FAQ: [(&str, &str); 7] = [
     ),
     (
         "Peut-il limiter le débit des appareils connectés à mon iPhone ?",
-        "Non. iOS ne donne à aucune app le contrôle du trafic du partage de connexion. Vous pouvez configurer des plafonds et voir leur effet simulé sur votre débit mesuré. L’app affiche alors le statut « Simulé », jamais « Appliqué ».",
+        "Pas par le système : iOS ne donne à aucune app le contrôle du partage de connexion. FLUXA propose un relais : chaque appareil relié qui règle son proxy sur l’iPhone y fait passer son trafic, et le relais le plafonne réellement. Un appareil sans ce réglage, ou une app qui ignore le proxy, n’est pas plafonné : le statut affiché est « Partiel », jamais « Appliqué ».",
     ),
     (
-        "À quoi sert un profil s’il n’est pas appliqué au partage ?",
+        "À quoi sert un profil sans le relais ?",
         "À préparer vos réglages, à comparer des scénarios sur votre débit réel et à déclencher des alertes ou des automatisations sur vos données locales. Si une fonction devient applicable, l’app le signale seulement après confirmation du système.",
     ),
     (
@@ -795,11 +809,11 @@ const FAQ: [(&str, &str); 7] = [
     ),
     (
         "L’app mesure-t-elle en arrière-plan ?",
-        "Les cadences annoncées valent quand l’app est au premier plan. iOS restreint l’exécution en arrière-plan, et la fréquence des mesures peut alors baisser.",
+        "Les mesures tournent quand l’app est au premier plan : iOS la suspend en arrière-plan. À votre retour, FLUXA relit les compteurs du système et affiche ce qui a passé entre-temps, au minimum. Le relais de partage, lui, continue en arrière-plan dans une extension réseau.",
     ),
     (
-        "Faut-il installer un VPN ?",
-        "Non. Le VPN local est facultatif et demande votre accord. Il traite uniquement le trafic de l’iPhone passé par le tunnel, pas celui des appareils reliés au partage.",
+        "Pourquoi l’app ajoute-t-elle une configuration VPN ?",
+        "Seulement si vous ouvrez le relais de partage, et avec votre accord. Cette extension garde le relais en service quand FLUXA est en arrière-plan. Elle ne transporte aucun trafic de l’iPhone. Sans elle, le relais tourne tant que l’app est ouverte.",
     ),
     (
         "Est-ce un simple test de vitesse ?",
@@ -837,9 +851,9 @@ fn call_to_action() -> Element {
         .child(
             div()
                 .class("wrap cta__inner")
-                .child(h2().id("h-cta").text("Bientôt sur l’App Store"))
+                .child(h2().id("h-cta").text("En bêta privée sur TestFlight"))
                 .child(p().text(
-                    "FLUXA arrive d’abord en bêta sur TestFlight, puis sur l’App Store. L’app est conçue pour iPhone et fonctionne sans compte.",
+                    "FLUXA est testée en bêta privée sur TestFlight. Elle n’est pas encore sur l’App Store, et aucune date n’est annoncée. L’app est conçue pour iPhone et fonctionne sans compte.",
                 ))
                 .child(store_badge()),
         )
@@ -881,6 +895,7 @@ const FOOTER: [(&str, &[(&str, &str)]); 6] = [
             ("#f-test", "Test de débit"),
             ("#f-reseau", "Mon réseau"),
             ("#f-forfait", "Forfait mobile"),
+            ("#f-relais", "Relais de partage"),
             ("#f-partage", "Partage de connexion"),
             ("#f-historique", "Historique"),
             ("#f-automatisations", "Automatisations"),
@@ -963,13 +978,13 @@ fn site_footer(ctx: &Ctx) -> Element {
         ("Langue", "Français"),
         ("Compte", "Aucun"),
         ("Données", "Sur l’appareil"),
-        ("Distribution", "App Store"),
-        ("État", "V1 en développement"),
+        ("Distribution", "TestFlight, bêta privée"),
+        ("État", "V1 en bêta"),
     ];
     let notes = [
         (
             "Partage de connexion.",
-            " FLUXA ne contrôle pas le partage de connexion d’iOS. Les plafonds de débit réglés dans l’app sont des profils et des simulations. Ils ne sont pas appliqués aux appareils reliés à votre iPhone.",
+            " FLUXA ne contrôle pas le partage de connexion d’iOS. Sans le relais, les plafonds réglés dans l’app sont des simulations. Avec lui, ils s’appliquent au trafic des appareils reliés qui passent par le relais, et à lui seul.",
         ),
         (
             "Données de démonstration.",
@@ -997,7 +1012,7 @@ fn site_footer(ctx: &Ctx) -> Element {
                             .class("footer__brand")
                             .child(brand("#haut".to_owned(), "FLUXA, haut de page"))
                             .child(p().text(
-                                "Le moniteur de connexion pour iPhone qui mesure à la seconde et n’annonce que ce que le système confirme.",
+                                "Le moniteur de connexion pour iPhone qui mesure à la seconde et n’annonce comme appliqué que ce qui l’est réellement.",
                             ))
                             .child(
                                 ul().class("footer__badges")
@@ -1013,7 +1028,7 @@ fn site_footer(ctx: &Ctx) -> Element {
                             .class("footer__get")
                             .child(store_badge())
                             .child(small().text(
-                                "Bêta TestFlight avant la publication. Aucune date annoncée.",
+                                "Bêta privée sur TestFlight. Pas encore sur l’App Store, aucune date annoncée.",
                             )),
                     ),
             )
@@ -1131,7 +1146,7 @@ pub fn privacy(ctx: &Ctx) -> Page {
         ctx,
         "Politique de confidentialité",
         "Confidentialité · FLUXA",
-        "Cette politique décrit la V1 de FLUXA pour iPhone telle qu’elle est conçue. Elle sera revue avant la publication sur l’App Store.",
+        "Cette politique décrit la bêta de FLUXA pour iPhone. Elle sera revue à chaque évolution qui change les données traitées.",
         &[
             Block::Title("resume", "En bref"),
             Block::List(&[
@@ -1157,30 +1172,33 @@ pub fn privacy(ctx: &Ctx) -> Page {
             ),
             Block::Title("jamais", "Ce que FLUXA ne collecte pas"),
             Block::List(&[
-                "Le contenu de vos communications. L’app compte des octets, elle ne lit pas ce qu’ils transportent.",
+                "Le contenu de vos communications. L’app compte des octets. Le relais transmet le trafic des appareils reliés sans l’enregistrer : il n’en garde que les volumes par adresse. Pour le HTTPS, il ne voit que le nom du serveur demandé.",
                 "Vos mots de passe Wi-Fi.",
                 "Des identifiants d’appareils qu’iOS ne fournit pas. Une information inconnue reste marquée comme inconnue.",
             ]),
             Block::Title("reseau", "Ce que l’app échange sur le réseau"),
-            Block::Text("Pour mesurer, l’app a besoin de deux échanges, et seulement de ceux-là :"),
+            Block::Text("Pour mesurer, l’app fait deux échanges, et seulement ceux-là :"),
             Block::List(&[
                 "<strong>La sonde de latence.</strong> Quand l’app est ouverte, elle ouvre toutes les cinq secondes une connexion vers un hôte (www.apple.com par défaut, modifiable dans les réglages) et en mesure le délai. Aucune donnée n’y est envoyée ; l’hôte voit votre adresse IP, comme tout site que vous visitez.",
                 "<strong>Le test de débit.</strong> Il ne part que lorsque vous le lancez. Il télécharge et envoie des données de test sans contenu, avec un serveur de test (speed.cloudflare.com par défaut, modifiable dans les réglages), qui voit votre adresse IP.",
             ]),
             Block::Text("Les mesures qui en résultent restent sur l’iPhone."),
+            Block::Text(
+                "<strong>Le relais de partage</strong>, si vous l’ouvrez, transmet vers Internet le trafic des appareils reliés qui ont réglé leur proxy sur l’iPhone. Il ne sert que les appareils de votre partage de connexion, n’enregistre pas le contenu et ne garde que les volumes échangés par chaque adresse, sur l’iPhone.",
+            ),
             Block::Title("conservation", "Durées de conservation"),
             Block::List(&[
                 "Mesures détaillées : <strong>7 jours</strong>.",
                 "Agrégats horaires : <strong>30 jours</strong>.",
                 "Agrégats journaliers : <strong>12 mois</strong>.",
-                "Historique des profils : durée réglable dans l’app.",
+                "Journal des limites : les 500 dernières demandes.",
             ]),
             Block::Text(
                 "La suppression totale est possible à tout moment depuis les réglages de l’app.",
             ),
             Block::Title("autorisations", "Autorisations"),
             Block::Text(
-                "L’app demande une autorisation au moment où une fonction en a besoin, jamais en bloc au premier lancement. Le VPN local est facultatif. S’il est activé, il traite uniquement le trafic de l’iPhone passé par le tunnel.",
+                "L’app demande une autorisation au moment où une fonction en a besoin, jamais en bloc au premier lancement. La configuration VPN n’est demandée qu’à l’ouverture du relais : elle garde le relais en service en arrière-plan et ne transporte aucun trafic de l’iPhone.",
             ),
             Block::Title("site", "Ce site et les cookies"),
             Block::Text(
@@ -1218,13 +1236,13 @@ pub fn legal(ctx: &Ctx) -> Page {
             Block::Fields(&[("Adresse électronique", "à compléter")]),
             Block::Title("conditions", "Conditions d’utilisation du site"),
             Block::Text(
-                "Ce site présente l’application FLUXA pour iPhone, en cours de développement. Les fonctions décrites correspondent à la V1 prévue et peuvent évoluer avant la publication.",
+                "Ce site présente l’application FLUXA pour iPhone, en bêta privée. Les fonctions décrites sont celles de la bêta et peuvent évoluer.",
             ),
             Block::Text(
                 "Les débits, latences et consommations affichés sur le site sont des données de démonstration. Les préréglages de profil sont des valeurs de départ, pas des débits garantis.",
             ),
             Block::Text(
-                "FLUXA ne contrôle pas le partage de connexion d’iOS. Les plafonds de débit réglés dans l’app sont des profils et des simulations.",
+                "FLUXA ne contrôle pas le partage de connexion d’iOS. Sans le relais, les plafonds réglés dans l’app sont des simulations ; avec lui, ils ne s’appliquent qu’au trafic des appareils qui passent par le relais.",
             ),
             Block::Title("propriete", "Propriété intellectuelle"),
             Block::Text(
