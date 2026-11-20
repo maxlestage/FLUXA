@@ -9,6 +9,7 @@ logique. La tentative d'application d'un plafond au partage de connexion est un 
 | `FluxaCore/` | la logique, testée sans l'interface sous Linux et macOS : débit, latence, profils, limites et simulation, automatisations, appareils, historique, volume par réseau, rattrapage hors de l'app, forfait mobile, sessions de partage, stockage SQLite |
 | `Shaper/` | le module Rust `fluxa-shaper` (ABI C, `include/fluxa_shaper.h`) : le relais de partage (mandataire qui plafonne et compte le trafic des appareils reliés), et la tentative par les mécanismes du noyau (pf, dummynet, sysctl) |
 | `App/` | l'app SwiftUI et l'accès au système (`App/Services/`) |
+| `RelayExtension/` | l'extension de tunnel qui garde le relais de partage en service en arrière-plan |
 | `AppTests/` | les règles de l'interface : écriture des mesures, échelles, résumés |
 | `AppUITests/` | l'app lancée dans le simulateur et manipulée écran par écran |
 | `Config/` | l'identité de l'app et sa signature |
@@ -108,9 +109,15 @@ Ce qu'il faut savoir :
 - seul le trafic qui passe par le relais est plafonné : un appareil qui retire le réglage, ou une
   app qui ignore le mandataire (UDP, certains jeux), y échappe. Le statut affiché est donc
   « Partiel », jamais « Appliqué » ;
-- le relais tourne tant que FLUXA est au premier plan (iOS suspend les apps en arrière-plan) ;
-  l'écran peut rester allumé. Si FLUXA est fermé, la configuration automatique renvoie l'appareil
-  en direct : il garde sa connexion, sans plafond ;
+- sur iPhone, le relais tourne dans une extension réseau (`RelayExtension/`) : il reste en service
+  quand FLUXA est en arrière-plan, signalé par l'icône VPN. Ce tunnel ne transporte aucun trafic
+  de l'iPhone (aucune route ne lui est confiée) ; il garde seulement le relais en vie. iOS demande
+  une fois d'autoriser sa configuration. Si elle est refusée, ou dans le simulateur, le relais
+  tourne dans l'app, au premier plan ;
+- si le relais s'arrête, la configuration automatique renvoie l'appareil en direct : il garde sa
+  connexion, sans plafond ;
+- l'App Store réserve les apps qui utilisent un tunnel réseau aux comptes développeur
+  d'organisation (règle 5.4 des consignes d'Apple). TestFlight n'est pas concerné ;
 - le relais ne sert que les appareils du partage (réseau 172.20.10.0/28 et interfaces de pont) :
   ce n'est jamais un mandataire ouvert sur un Wi-Fi public.
 

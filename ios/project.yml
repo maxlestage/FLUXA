@@ -29,10 +29,18 @@ targets:
       - path: App
     dependencies:
       - package: FluxaCore
-      # La tentative d'application du plafond, en Rust, liée par son ABI C
-      # (construite par Shaper/build-xcframework.sh avant xcodegen).
+      # Le relais et la tentative d'application du plafond, en Rust, liés par leur ABI C
+      # (construits par Shaper/build-xcframework.sh avant xcodegen).
       - framework: Shaper/FluxaShaper.xcframework
         embed: false
+      # L'extension réseau qui garde le relais en service en arrière-plan.
+      - target: FluxaRelay
+      - sdk: NetworkExtension.framework
+    entitlements:
+      path: App/Fluxa.entitlements
+      properties:
+        com.apple.developer.networking.networkextension:
+          - packet-tunnel-provider
     info:
       path: App/Info.plist
       properties:
@@ -56,12 +64,46 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(FLUXA_BUNDLE_ID)
         PRODUCT_NAME: Fluxa
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  # L'extension de tunnel qui fait tourner le relais de partage en arrière-plan. Le tunnel
+  # ne transporte aucun trafic de l'iPhone : il garde seulement le relais en service.
+  FluxaRelay:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: RelayExtension
+    dependencies:
+      - framework: Shaper/FluxaShaper.xcframework
+        embed: false
+      - sdk: NetworkExtension.framework
+    info:
+      path: RelayExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Relais FLUXA
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
+    entitlements:
+      path: RelayExtension/FluxaRelay.entitlements
+      properties:
+        com.apple.developer.networking.networkextension:
+          - packet-tunnel-provider
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(FLUXA_BUNDLE_ID).relay
+        PRODUCT_NAME: FluxaRelay
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
 
   # Les règles de l'interface : écriture des mesures, échelle du limiteur, interfaces.
   FluxaTests:

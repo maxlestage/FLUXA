@@ -48,6 +48,11 @@ final class AppModel {
     /// Le débit de chaque appareil relayé, par adresse.
     private(set) var relayRates: [String: RelayRate] = [:]
     private(set) var relayError: String?
+    /// Un relais qui tourne, mais pas comme prévu (extension refusée, relais dans l'app).
+    private(set) var relayNotice: String?
+    private var relayHost: any RelayHost = AppModel.preferredRelayHost()
+    private var relayOpening = false
+    private var relayRefreshing = false
     private var relayPreviousSample: (date: Date, clients: [String: RelayStatus.Client])?
 
     /// Le relais ouvert à la demande de l'utilisateur, rouvert au retour dans l'app.
@@ -170,7 +175,7 @@ final class AppModel {
             self.snapshot = self.engine.snapshot
         }
         if relayEnabled {
-            openRelay()
+            Task { await resumeRelay() }
         }
         sampling = Task { [weak self] in
             while !Task.isCancelled {
@@ -183,8 +188,14 @@ final class AppModel {
     func stop() {
         sampling?.cancel()
         sampling = nil
-        // iOS suspend l'app en arrière-plan : le relais se ferme et se rouvre au retour.
-        closeRelay()
+        // iOS suspend l'app en arrière-plan : un relais dans l'app se ferme et se rouvre au
+        // retour ; celui de l'extension réseau continue.
+        if !relayHost.keepsRunningInBackground {
+            RelayBridge.stop()
+            relayStatus = nil
+            engine.relayStopped()
+            refreshProfiles()
+        }
         pathMonitor.stop()
         engine.stop()
         do {
@@ -358,43 +369,77 @@ final class AppModel {
 
     var relayIsRunning: Bool { relayStatus?.running == true }
 
+    /// Vrai si le relais en service continue en arrière-plan (extension réseau).
+    var relayRunsInBackground: Bool { relayIsRunning && relayHost.keepsRunningInBackground }
+
     /// Ouvre ou ferme le relais, à la demande de l'utilisateur.
     func setRelay(_ enabled: Bool) {
         relayEnabled = enabled
-        if enabled {
-            openRelay()
-        } else {
-            closeRelay()
+        Task {
+            if enabled {
+                await openRelay()
+            } else {
+                await closeRelay()
+            }
         }
     }
 
-    private func openRelay() {
+    /// Sur iPhone, le relais tourne dans l'extension réseau ; dans le simulateur, où les
+    /// extensions de tunnel ne tournent pas, et si l'extension est refusée, dans l'app.
+    private static func preferredRelayHost() -> any RelayHost {
         #if targetEnvironment(simulator)
-        // Dans le simulateur, les appareils de test arrivent par la boucle locale.
-        let allowLoopback = true
+        return InAppRelayHost(allowLoopback: true)
         #else
-        let allowLoopback = false
+        return TunnelRelayHost()
         #endif
-        let code = RelayBridge.start(allowLoopback: allowLoopback)
-        guard code == 0 else {
-            relayError = Self.relayProblem(code)
-            relayStatus = nil
-            updateIdleTimer()
-            return
-        }
-        relayError = nil
+    }
+
+    private func openRelay() async {
+        guard !relayOpening else { return }
+        relayOpening = true
+        defer { relayOpening = false }
         relayPreviousSample = nil
         relayRates = [:]
-        applyRelayLimits()
-        refreshRelay()
+        var problem = await relayHost.open(limits: relayLimits())
+        if let failure = problem, relayHost.keepsRunningInBackground {
+            // L'extension n'a pas démarré : le relais tourne dans l'app, au premier plan.
+            relayHost = InAppRelayHost(allowLoopback: false)
+            problem = await relayHost.open(limits: relayLimits())
+            relayNotice = problem == nil
+                ? "\(failure) Le relais tourne dans l’app : gardez FLUXA ouvert."
+                : nil
+        } else {
+            relayNotice = nil
+        }
+        relayError = problem
+        if problem == nil {
+            confirmRelayLimit()
+        }
+        await refreshRelayNow()
         updateIdleTimer()
     }
 
-    private func closeRelay() {
-        RelayBridge.stop()
+    /// Reprend un relais resté en service dans l'extension pendant que l'app était fermée.
+    private func resumeRelay() async {
+        if await relayHost.isRunning() {
+            await relayHost.apply(relayLimits())
+            confirmRelayLimit()
+            await refreshRelayNow()
+            updateIdleTimer()
+        } else {
+            await openRelay()
+        }
+    }
+
+    private func closeRelay() async {
+        await relayHost.close()
+        // La prochaine ouverture retente l'extension.
+        relayHost = Self.preferredRelayHost()
         relayStatus = nil
         relayRates = [:]
         relayPreviousSample = nil
+        relayNotice = nil
+        relayError = nil
         engine.relayStopped()
         refreshProfiles()
         updateIdleTimer()
@@ -411,34 +456,60 @@ final class AppModel {
         }
     }
 
-    /// Donne au relais le plafond en cours et celui de chaque appareil, et consigne la
-    /// limite comme appliquée par le relais.
-    private func applyRelayLimits() {
-        guard relayStatus != nil || relayEnabled, relayError == nil else { return }
+    /// Le plafond en cours et celui de chaque appareil.
+    private func relayLimits() -> RelayLimits {
         let policy = engine.lastApplyResult?.requested ?? activeProfile?.policy
-        RelayBridge.setLimit(downloadBps: policy?.downloadBps, uploadBps: policy?.uploadBps)
+        var limits = RelayLimits(download: policy?.downloadBps, upload: policy?.uploadBps)
         for (address, profileID) in relayDeviceProfiles {
             let profile = profiles.first { $0.id == profileID }
-            RelayBridge.setDeviceLimit(address: address, downloadBps: profile?.downloadBps, uploadBps: profile?.uploadBps)
+            limits.devices[address] = (profile?.downloadBps, profile?.uploadBps)
         }
-        if let policy, policy.downloadBps != nil || policy.uploadBps != nil {
-            _ = try? engine.confirmRelayLimit(policy)
-            refreshProfiles()
-            historyRevision += 1
+        return limits
+    }
+
+    /// Le relais pose réellement le plafond : la limite est consignée comme partielle.
+    private func confirmRelayLimit() {
+        let policy = engine.lastApplyResult?.requested ?? activeProfile?.policy
+        guard let policy, policy.downloadBps != nil || policy.uploadBps != nil else { return }
+        _ = try? engine.confirmRelayLimit(policy)
+        refreshProfiles()
+        historyRevision += 1
+    }
+
+    /// Donne au relais en service les plafonds du moment.
+    private func applyRelayLimits() {
+        guard relayIsRunning else { return }
+        let limits = relayLimits()
+        Task {
+            await relayHost.apply(limits)
+            confirmRelayLimit()
         }
     }
 
     /// Le profil d'un appareil relayé. `nil` : plus de plafond propre à l'appareil.
     func setRelayProfile(_ profileID: String?, for address: String) {
         relayDeviceProfiles[address] = profileID
-        let profile = profiles.first { $0.id == profileID }
-        RelayBridge.setDeviceLimit(address: address, downloadBps: profile?.downloadBps, uploadBps: profile?.uploadBps)
-        refreshRelay()
+        guard relayIsRunning else { return }
+        var limits = relayLimits()
+        // Un appareil sans profil voit son plafond retiré.
+        if profileID == nil {
+            limits.devices[address] = (nil, nil)
+        }
+        Task { await relayHost.apply(limits) }
     }
 
+    /// Relève l'état du relais, sans chevaucher le relevé précédent.
     private func refreshRelay() {
-        guard relayEnabled, relayError == nil else { return }
-        guard let status = RelayBridge.status(), status.running else {
+        guard relayEnabled, relayError == nil, !relayOpening, !relayRefreshing else { return }
+        relayRefreshing = true
+        Task {
+            await refreshRelayNow()
+            relayRefreshing = false
+        }
+    }
+
+    private func refreshRelayNow() async {
+        guard let status = await relayHost.status(), status.running else {
             set(\.relayStatus, nil)
             return
         }
@@ -457,7 +528,9 @@ final class AppModel {
     }
 
     private func updateIdleTimer() {
-        UIApplication.shared.isIdleTimerDisabled = relayStatus != nil && keepsScreenOnForRelay
+        // L'extension réseau tient le relais en arrière-plan : l'écran peut s'éteindre.
+        UIApplication.shared.isIdleTimerDisabled =
+            relayStatus != nil && keepsScreenOnForRelay && !relayHost.keepsRunningInBackground
     }
 
     /// Le message d'erreur d'une limite invalide, ou `nil` si elle est correcte.
