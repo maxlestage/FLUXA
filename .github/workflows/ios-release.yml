@@ -3,13 +3,17 @@
 #
 # Ce workflow n'a jamais tourné : il demande un compte développeur Apple, que le dépôt
 # n'a pas encore. Avant le premier lancement :
-#   1. créer l'app dans App Store Connect, avec l'identifiant choisi ;
-#   2. créer une clé d'API App Store Connect (Utilisateurs et accès → Intégrations →
-#      API App Store Connect), avec le rôle « Gestionnaire d'apps » ;
+#   1. enregistrer l'identifiant de l'app (developer.apple.com → Certificates,
+#      Identifiers & Profiles → Identifiers), puis créer l'app dans App Store Connect
+#      avec cet identifiant ;
+#   2. créer une clé d'API d'équipe App Store Connect (Utilisateurs et accès →
+#      Intégrations → API App Store Connect), avec le rôle « Admin » : la signature
+#      automatique crée le certificat de distribution, ce que les rôles plus restreints
+#      ne permettent pas toujours à une clé ;
 #   3. régler, dans GitHub → Settings → Secrets and variables → Actions :
 #        - secret   ASC_KEY_ID        l'identifiant de la clé
 #        - secret   ASC_ISSUER_ID     l'identifiant de l'émetteur
-#        - secret   ASC_PRIVATE_KEY   le contenu du fichier .p8
+#        - secret   ASC_PRIVATE_KEY   le contenu du fichier .p8, lignes BEGIN et END comprises
 #        - variable APPLE_TEAM_ID     l'identifiant de l'équipe (dix caractères)
 #        - variable IOS_BUNDLE_ID     l'identifiant de l'app
 # Sans eux, le workflow s'arrête en le disant.
