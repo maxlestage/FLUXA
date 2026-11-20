@@ -3,6 +3,9 @@ Config/Signing.local.xcconfig
 # Écrits par `xcodegen generate`.
 *.xcodeproj
 App/Info.plist
+App/Fluxa.entitlements
+RelayExtension/Info.plist
+RelayExtension/FluxaRelay.entitlements
 # Construction.
 build/
 .build/
