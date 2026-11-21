@@ -91,7 +91,7 @@ struct RelayView: View {
             } header: {
                 Text("Sur chaque appareil relié")
             } footer: {
-                Text("Réglez une fois le mandataire de l’appareil sur la configuration automatique ci-dessus. Si FLUXA est fermé, l’appareil repasse en direct : il n’est jamais privé de connexion, mais il n’est plus plafonné.")
+                Text("Réglez une fois le mandataire de l’appareil sur la configuration automatique ci-dessus. Si FLUXA est fermé, l’appareil repasse en direct : il n’est jamais privé de connexion, mais il n’est plus plafonné. Le réseau local (imprimante, box, autres appareils du partage) reste en direct.")
             }
 
             Section {
