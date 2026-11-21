@@ -13,10 +13,12 @@ on:
     paths:
       - "ios/**"
       - ".github/workflows/ios.yml"
+      - ".github/scripts/**"
   pull_request:
     paths:
       - "ios/**"
       - ".github/workflows/ios.yml"
+      - ".github/scripts/**"
   workflow_dispatch:
 
 concurrency:
@@ -51,8 +53,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - name: Xcode version
-        run: xcodebuild -version
+      - name: Use the newest Xcode
+        run: .github/scripts/select-xcode.sh
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Build the Rust shaper (C ABI)
