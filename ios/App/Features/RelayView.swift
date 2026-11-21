@@ -261,6 +261,19 @@ enum RelayText {
         return trimmed.isEmpty ? nil : String(trimmed.prefix(40))
     }
 
+    /// Le relais en une ligne, pour le tableau de bord : les appareils qui l'utilisent en
+    /// ce moment et leur débit total.
+    static func dashboardSummary(clients: [RelayStatus.Client], rates: [String: RelayRate]) -> String {
+        let active = clients.filter { $0.connections > 0 }
+        guard !active.isEmpty else {
+            return "Relais ouvert : aucun appareil ne passe par lui pour l’instant."
+        }
+        let measured = active.compactMap { rates[$0.address]?.toDeviceBps }
+        let devices = active.count == 1 ? "1 appareil relayé" : "\(active.count) appareils relayés"
+        guard !measured.isEmpty else { return devices }
+        return "\(devices) · \(Format.rate(measured.reduce(0, +))) vers eux"
+    }
+
     /// La phrase que lit VoiceOver pour un appareil relayé.
     static func spoken(name: String?, client: RelayStatus.Client, rate: RelayRate?) -> String {
         var parts = [displayName(name, address: client.address)]

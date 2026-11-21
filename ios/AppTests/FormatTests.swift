@@ -343,6 +343,34 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(MeasureTilesLayout.columnCount(for: .accessibility5), 1)
     }
 
+    func testTheDashboardSummarisesTheRelay() {
+        func client(_ address: String, connections: Int) -> RelayStatus.Client {
+            RelayStatus.Client(
+                address: address, connections: connections, toDeviceBytes: 0, fromDeviceBytes: 0,
+                idleSeconds: 0, downloadLimit: 0, uploadLimit: 0)
+        }
+        XCTAssertEqual(
+            RelayText.dashboardSummary(clients: [], rates: [:]),
+            "Relais ouvert : aucun appareil ne passe par lui pour l’instant."
+        )
+        // Un appareil inactif ne compte pas.
+        XCTAssertEqual(
+            RelayText.dashboardSummary(clients: [client("172.20.10.3", connections: 0)], rates: [:]),
+            "Relais ouvert : aucun appareil ne passe par lui pour l’instant."
+        )
+        let clients = [client("172.20.10.3", connections: 2), client("172.20.10.4", connections: 1)]
+        // Sans débit encore mesuré, pas de chiffre inventé.
+        XCTAssertEqual(RelayText.dashboardSummary(clients: clients, rates: [:]), "2 appareils relayés")
+        let rates = [
+            "172.20.10.3": RelayRate(toDeviceBps: 3_000_000, fromDeviceBps: 0),
+            "172.20.10.4": RelayRate(toDeviceBps: 400_000, fromDeviceBps: 0),
+        ]
+        XCTAssertEqual(
+            RelayText.dashboardSummary(clients: clients, rates: rates), "2 appareils relayés · 3,4\(space)Mb/s vers eux")
+        XCTAssertEqual(
+            RelayText.dashboardSummary(clients: [clients[0]], rates: rates), "1 appareil relayé · 3,0\(space)Mb/s vers eux")
+    }
+
     func testVoiceOverReadsARelayedDeviceInOneSentence() {
         let client = RelayStatus.Client(
             address: "172.20.10.3", connections: 2, toDeviceBytes: 120_000_000, fromDeviceBytes: 8_000_000,
