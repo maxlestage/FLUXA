@@ -362,6 +362,9 @@ final class FormatTests: XCTestCase {
         let yesterday = calendar.date(from: DateComponents(year: 2026, month: 11, day: 20, hour: 22, minute: 5))!
         XCTAssertTrue(WidgetText.updated(earlier, now: now, calendar: calendar).hasPrefix("Relevé à "))
         XCTAssertTrue(WidgetText.updated(yesterday, now: now, calendar: calendar).hasPrefix("Relevé le "))
+        // Après minuit, le volume de la veille n'est plus « aujourd’hui ».
+        XCTAssertEqual(WidgetText.day(of: earlier, now: now, calendar: calendar), "Aujourd’hui")
+        XCTAssertTrue(WidgetText.day(of: yesterday, now: now, calendar: calendar).hasPrefix("Le 20"))
         let plan = WidgetSnapshot.Plan(
             usedBytes: 12_400_000_000, allowanceBytes: 50_000_000_000, remainingBytes: 37_600_000_000,
             fractionUsed: 0.248, cycleEnd: now)
