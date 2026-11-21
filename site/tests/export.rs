@@ -37,7 +37,7 @@ async fn exports_every_page_behind_the_base_path() {
         "site.css",
         "favicon.svg",
         "fonts/hanken-grotesk.woff2",
-        "og-image.png",
+        "og-image.jpg",
         "icons/icon-192.png",
         "icons/icon-maskable-512.png",
         "manifest.webmanifest",
@@ -70,7 +70,7 @@ async fn exports_every_page_behind_the_base_path() {
         assert!(html.contains("https://maxlestage.github.io/FLUXA/"));
         // La carte de partage a une adresse absolue ; le service worker, celle du site.
         assert!(html.contains(
-            r#"<meta property="og:image" content="https://maxlestage.github.io/FLUXA/og-image.png"/>"#
+            r#"<meta property="og:image" content="https://maxlestage.github.io/FLUXA/og-image.jpg"/>"#
         ));
         assert!(
             html.contains(r#"register("/FLUXA/sw.js")"#),

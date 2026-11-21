@@ -147,7 +147,7 @@ fn layout(ctx: &Ctx, title: &'static str, description: &'static str, content: El
                 .canonical(format!("{}{}", ctx.origin, ctx.path))
                 // La carte de partage : une grande image, avec ses dimensions et son texte.
                 .image(format!("{}{SHARE_IMAGE}", ctx.origin))
-                .meta_property("og:image:type", "image/png")
+                .meta_property("og:image:type", "image/jpeg")
                 .meta_property("og:image:width", "1200")
                 .meta_property("og:image:height", "630")
                 .meta_property("og:image:alt", SHARE_ALT)
@@ -1337,7 +1337,8 @@ fn share_chart() -> String {
     )
 }
 
-/// La carte de partage, à capturer en 1200 × 630 pour refaire `public/og-image.png`.
+/// La carte de partage, à capturer en 1200 × 630 pour refaire `public/og-image.jpg`
+/// (JPEG qualité 92 : trois fois plus léger que le PNG, identique à l'œil).
 pub fn share_card(ctx: &Ctx) -> Page {
     Page::new("Carte de partage · FLUXA")
         .lang("fr")
