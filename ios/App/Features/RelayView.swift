@@ -141,6 +141,8 @@ struct RelayView: View {
             }
         }
         .fluxaBackground()
+        .onAppear { model.relayScreenVisible = true }
+        .onDisappear { model.relayScreenVisible = false }
         .navigationTitle("Relais de partage")
         .navigationBarTitleDisplayMode(.inline)
     }
