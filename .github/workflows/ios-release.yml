@@ -58,6 +58,10 @@ jobs:
           export KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
           echo "KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
           "$RUNNER_TEMP/venv/bin/python" ios/Config/appstoreconnect.py
+      - name: Revoke the development certificates left by earlier runs
+        # Chaque envoi en crée un (« Created via API ») : sans cela, la limite d'Apple
+        # bloque la signature. Les certificats créés sur un Mac ne sont pas touchés.
+        run: '"$RUNNER_TEMP/venv/bin/python" .github/release/revoke_ci_certificates.py'
       - name: Use the newest Xcode
         run: .github/scripts/select-xcode.sh
       - name: Install XcodeGen
