@@ -30,16 +30,25 @@ struct SnapshotProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
-        let entry = SnapshotEntry(date: Date(), snapshot: WidgetSnapshot.load())
-        // Relire de temps en temps : l'heure du relevé change de jour à minuit.
-        completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(30 * 60))))
+        let now = Date()
+        let snapshot = WidgetSnapshot.load()
+        // Une entrée à minuit : le volume de la veille cesse d'être présenté comme celui du jour.
+        let entries = Self.entryDates(now: now).map { SnapshotEntry(date: $0, snapshot: snapshot) }
+        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(30 * 60))))
+    }
+
+    static func entryDates(now: Date, calendar: Calendar = .current) -> [Date] {
+        guard let midnight = calendar.nextDate(
+            after: now, matching: DateComponents(hour: 0, minute: 0), matchingPolicy: .nextTime)
+        else { return [now] }
+        return [now, midnight]
     }
 }
 
 struct TodayWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "FluxaToday", provider: SnapshotProvider()) { entry in
-            FamilyView(snapshot: entry.snapshot)
+            FamilyView(snapshot: entry.snapshot, now: entry.date)
                 .containerBackground(for: .widget) {
                     Theme.background
                 }
@@ -53,9 +62,10 @@ struct TodayWidget: Widget {
 private struct FamilyView: View {
     @Environment(\.widgetFamily) private var family
     let snapshot: WidgetSnapshot?
+    let now: Date
 
     var body: some View {
-        FluxaWidgetView(snapshot: snapshot, layout: layout)
+        FluxaWidgetView(snapshot: snapshot, layout: layout, now: now)
     }
 
     private var layout: WidgetLayout {
