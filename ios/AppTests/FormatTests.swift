@@ -477,6 +477,15 @@ final class FormatTests: XCTestCase {
         XCTAssertTrue(RelayActivityController.shouldUpdate(force: false, devicesChanged: false, lastUpdate: now.addingTimeInterval(-10), now: now))
     }
 
+    func testTheCopyConfirmationLastsTwoSecondsUnlessATestAsksMore() {
+        let defaults = UserDefaults(suiteName: "copie-\(UUID().uuidString)")!
+        XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 2)
+        defaults.set(30.0, forKey: "fluxaCopyConfirmationSeconds")
+        XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 30)
+        defaults.set(0.5, forKey: "fluxaCopyConfirmationSeconds")
+        XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 2, "jamais moins de deux secondes")
+    }
+
     func testACopyRowSaysWhetherItWasCopied() {
         XCTAssertEqual(
             RelayText.copyLabel("Mandataire", value: "172.20.10.1:8888", copied: false),

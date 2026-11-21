@@ -220,7 +220,8 @@ private struct RelayClientRow: View {
 }
 
 /// Une valeur à recopier sur l'autre appareil. Le toucher la copie ; la ligne le confirme
-/// deux secondes (coche, « Copié », vibration légère), et VoiceOver l'annonce.
+/// deux secondes (coche, « Copié », vibration légère), et VoiceOver l'annonce. Les tests
+/// d'interface allongent ce délai : un simulateur lent lit l'écran en plus de deux secondes.
 private struct CopyRow: View {
     let label: String
     let value: String
@@ -235,7 +236,7 @@ private struct CopyRow: View {
             AccessibilityNotification.Announcement("\(label) copié").post()
             reset?.cancel()
             reset = Task {
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(for: .seconds(RelayText.copyConfirmationSeconds()))
                 guard !Task.isCancelled else { return }
                 copied = false
             }
@@ -272,6 +273,12 @@ private struct CopyRow: View {
 
 /// Les phrases du relais, séparées de l'écran pour être testées.
 enum RelayText {
+    /// La durée de la confirmation de copie : deux secondes, ou plus si le réglage
+    /// `fluxaCopyConfirmationSeconds` le demande (tests d'interface).
+    static func copyConfirmationSeconds(_ defaults: UserDefaults = .standard) -> Double {
+        max(2, defaults.double(forKey: "fluxaCopyConfirmationSeconds"))
+    }
+
     /// Ce que VoiceOver lit d'une ligne à copier, avant et juste après la copie.
     static func copyLabel(_ label: String, value: String, copied: Bool) -> String {
         "\(label) : \(value). " + (copied ? "Copié." : "Toucher pour copier.")

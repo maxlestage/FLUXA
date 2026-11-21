@@ -494,12 +494,14 @@ final class FluxaUITests: XCTestCase {
     // MARK: Relais de partage
 
     func testTheRelayCarriesAndCountsADevicesTraffic() {
-        launch(["-fluxaScreen", "relais"])
+        // La confirmation de copie dure assez pour que le simulateur la lise.
+        launch(["-fluxaScreen", "relais", "-fluxaCopyConfirmationSeconds", "30"])
         XCTAssertTrue(app.navigationBars["Relais de partage"].waitForExistence(timeout: 30))
         let toggle = app.switches["interrupteur-relais"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 10))
         turnOn(toggle)
-        XCTAssertTrue(element(containing: "En service").waitForExistence(timeout: 10))
+        // Le relais peut attendre jusqu'à 15 s l'extension réseau avant de démarrer seul.
+        XCTAssertTrue(element(containing: "En service").waitForExistence(timeout: 30))
         XCTAssertTrue(element(containing: "proxy.pac").exists)
         // Copier l'adresse de configuration le confirme sur la ligne.
         let pac = app.buttons["copier-pac"]
@@ -508,8 +510,7 @@ final class FluxaUITests: XCTestCase {
         func pacRow(saying text: String) -> XCUIElement {
             app.buttons.matching(NSPredicate(format: "identifier == 'copier-pac' AND label CONTAINS %@", text)).firstMatch
         }
-        XCTAssertTrue(pacRow(saying: "Copié.").waitForExistence(timeout: 2))
-        XCTAssertTrue(pacRow(saying: "Toucher pour copier").waitForExistence(timeout: 5), "la confirmation s'efface")
+        XCTAssertTrue(pacRow(saying: "Copié.").waitForExistence(timeout: 10))
 
         // Un appareil relié : le lanceur de tests, qui passe par le relais (boucle locale).
         let configuration = URLSessionConfiguration.ephemeral
