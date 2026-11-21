@@ -532,10 +532,28 @@ fn handle(shared: &Arc<Shared>, client: &mut TcpStream, peer: IpAddr) -> io::Res
 
 /// Le fichier de configuration automatique : tout passe par le relais, et en direct si
 /// le relais ne répond plus (l'appareil n'est jamais privé de connexion).
+///
+/// Le réseau local reste en direct : noms sans domaine, `.local`, et adresses privées,
+/// de lien local ou de bouclage écrites en chiffres (le partage lui-même, une imprimante,
+/// une box). Elles ne vont pas sur Internet : les relayer ne ferait que les ralentir et
+/// les compter à tort. Une adresse IPv6 publique, sans point, n'est pas prise pour un nom
+/// local. Un nom n'est jamais résolu ici, pour ne pas retarder chaque page.
 pub fn pac(address: IpAddr, port: u16) -> String {
-    format!(
-        "function FindProxyForURL(url, host) {{\n  if (isPlainHostName(host) || shExpMatch(host, \"*.local\")) return \"DIRECT\";\n  return \"PROXY {address}:{port}; SOCKS5 {address}:{port}; DIRECT\";\n}}\n"
-    )
+    const TEMPLATE: &str = r#"function FindProxyForURL(url, host) {
+  var relay = "PROXY @RELAY@; SOCKS5 @RELAY@; DIRECT";
+  var v6 = host.replace(/^\[|\]$/g, "").toLowerCase();
+  if (v6.indexOf(":") >= 0) return (v6 == "::1" || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6)) ? "DIRECT" : relay;
+  if (isPlainHostName(host) || shExpMatch(host, "*.local")) return "DIRECT";
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host) && (
+      isInNet(host, "10.0.0.0", "255.0.0.0") ||
+      isInNet(host, "172.16.0.0", "255.240.0.0") ||
+      isInNet(host, "192.168.0.0", "255.255.0.0") ||
+      isInNet(host, "169.254.0.0", "255.255.0.0") ||
+      isInNet(host, "127.0.0.0", "255.0.0.0"))) return "DIRECT";
+  return relay;
+}
+"#;
+    TEMPLATE.replace("@RELAY@", &format!("{address}:{port}"))
 }
 
 fn socks5(
@@ -1046,6 +1064,31 @@ mod tests {
             "{answer}"
         );
         assert!(answer.contains("DIRECT"), "{answer}");
+    }
+
+    #[test]
+    fn the_automatic_configuration_keeps_the_local_network_direct() {
+        let file = pac("172.20.10.1".parse().unwrap(), 8888);
+        assert!(file
+            .contains("var relay = \"PROXY 172.20.10.1:8888; SOCKS5 172.20.10.1:8888; DIRECT\";"));
+        // Les plages privées, de lien local et de bouclage, en IPv4 et en IPv6.
+        for range in [
+            "\"10.0.0.0\", \"255.0.0.0\"",
+            "\"172.16.0.0\", \"255.240.0.0\"",
+            "\"192.168.0.0\", \"255.255.0.0\"",
+            "\"169.254.0.0\", \"255.255.0.0\"",
+            "\"127.0.0.0\", \"255.0.0.0\"",
+            "/^f[cd]/",
+            "/^fe[89ab]/",
+        ] {
+            assert!(file.contains(range), "{range} manque");
+        }
+        // isInNet ne reçoit que des adresses écrites en chiffres : aucun nom n'est résolu.
+        assert!(!file.contains("dnsResolve"));
+        // Une adresse IPv6 publique n'a pas de point : elle est reconnue avant le test
+        // des noms sans domaine, qui la laisserait en direct.
+        assert!(file.find("indexOf(\":\")").unwrap() < file.find("isPlainHostName").unwrap());
+        assert!(file.contains(r"/^\d+\.\d+\.\d+\.\d+$/.test(host) && ("));
     }
 
     #[test]
