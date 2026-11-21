@@ -72,30 +72,60 @@ jobs:
         working-directory: ios
         run: |
           set -euo pipefail
-          # Le numéro de build suit celui du workflow : il augmente à chaque envoi.
+          # L'archive est signée sans certificat (signature locale « - », droits compris) :
+          # chaque machine neuve créait sinon un certificat de développement, et le compte en
+          # a un nombre limité. La signature de distribution se fait à l'export, avec le
+          # certificat géré par Apple. Le numéro de build suit celui du workflow.
           xcodebuild archive \
             -project Fluxa.xcodeproj -scheme Fluxa -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Fluxa.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             FLUXA_BUNDLE_ID="$BUNDLE_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
+            AppIdentifierPrefix="$TEAM_ID." \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_REQUIRED=NO \
+            PROVISIONING_PROFILE_SPECIFIER= \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
-      - name: Upload to TestFlight
+      - name: Sign for distribution and check the entitlements
         working-directory: ios
         run: |
           set -euo pipefail
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/Fluxa.xcarchive" \
-            -exportOptionsPlist Config/ExportOptions.plist \
-            -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          for destination in export upload; do
+            cp Config/ExportOptions.plist "$RUNNER_TEMP/export-$destination.plist"
+            /usr/libexec/PlistBuddy -c "Set :destination $destination" "$RUNNER_TEMP/export-$destination.plist"
+            /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$RUNNER_TEMP/export-$destination.plist"
+          done
+          export_archive() {
+            xcodebuild -exportArchive \
+              -archivePath "$RUNNER_TEMP/Fluxa.xcarchive" \
+              -exportOptionsPlist "$RUNNER_TEMP/export-$1.plist" \
+              -exportPath "$RUNNER_TEMP/export-$1" \
+              -allowProvisioningUpdates \
+              -authenticationKeyPath "$KEY_PATH" \
+              -authenticationKeyID "$ASC_KEY_ID" \
+              -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          }
+          # D'abord un export local, pour vérifier que l'app et ses extensions gardent
+          # leurs droits une fois signées pour la distribution.
+          export_archive export
+          mkdir -p "$RUNNER_TEMP/ipa" && cd "$RUNNER_TEMP/ipa" && unzip -q "$RUNNER_TEMP"/export-export/*.ipa
+          app=$(ls -d Payload/*.app)
+          check() {
+            codesign -d --entitlements - --xml "$1" 2>/dev/null > "$RUNNER_TEMP/entitlements.plist"
+            for key in "${@:2}"; do
+              grep -q "<key>$key</key>" "$RUNNER_TEMP/entitlements.plist" \
+                || { echo "::error::$1 : droit $key absent après signature."; exit 1; }
+            done
+            echo "$1 : droits vérifiés (${*:2})."
+          }
+          check "$app" com.apple.developer.networking.networkextension keychain-access-groups
+          check "$app/PlugIns/FluxaRelay.appex" com.apple.developer.networking.networkextension
+          check "$app/PlugIns/FluxaWidgets.appex" keychain-access-groups
+          cd - >/dev/null
+          # Puis l'envoi sur TestFlight.
+          export_archive upload
           echo "::notice::Build $GITHUB_RUN_NUMBER envoyé sur TestFlight pour $BUNDLE_ID. Apple le traite en 10 à 30 minutes."
       - name: Remove the key
         if: always()
