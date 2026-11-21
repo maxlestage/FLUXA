@@ -343,6 +343,13 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(MeasureTilesLayout.columnCount(for: .accessibility5), 1)
     }
 
+    func testAStoppedRelayIsReopenedWithoutHammering() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        XCTAssertTrue(AppModel.shouldReopenRelay(lastAttempt: nil, now: now))
+        XCTAssertFalse(AppModel.shouldReopenRelay(lastAttempt: now.addingTimeInterval(-10), now: now))
+        XCTAssertTrue(AppModel.shouldReopenRelay(lastAttempt: now.addingTimeInterval(-30), now: now))
+    }
+
     func testTheRelayFollowsTheDisplayedCap() {
         var sent = RelayLimits(download: 5_000_000, upload: 1_000_000)
         sent.devices["172.20.10.3"] = (800_000, nil)
