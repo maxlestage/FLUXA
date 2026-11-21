@@ -75,7 +75,10 @@ private struct PermissionRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
+                // Le titre passe à la ligne plutôt que d'être coupé à côté de son état.
                 Label(kind.title, systemImage: kind.symbol)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
                 Spacer(minLength: 12)
                 StatusPill(state.pill, state.title)
             }
