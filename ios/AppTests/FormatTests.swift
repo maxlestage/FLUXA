@@ -486,6 +486,11 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 2, "jamais moins de deux secondes")
     }
 
+    func testTheDevicesScreenSaysWhatTheRelaySeesAndNoMore() {
+        XCTAssertTrue(RelayText.devicesNote.contains("réglés sur lui"))
+        XCTAssertTrue(RelayText.devicesNote.contains("restent invisibles"))
+    }
+
     func testACopyRowSaysWhetherItWasCopied() {
         XCTAssertEqual(
             RelayText.copyLabel("Mandataire", value: "172.20.10.1:8888", copied: false),
