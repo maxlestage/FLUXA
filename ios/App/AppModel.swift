@@ -55,6 +55,8 @@ final class AppModel {
     /// Les plafonds donnés au relais en dernier, pour le resynchroniser quand le plafond
     /// affiché change par un autre chemin (automatisation, échéance, profil modifié).
     private var relaySentLimits: RelayLimits?
+    /// La dernière relance automatique d'un relais arrêté sans qu'on le demande.
+    private var relayLastReopen: Date?
     private var relayRefreshing = false
     private var relayPreviousSample: (date: Date, clients: [String: RelayStatus.Client])?
 
@@ -454,11 +456,33 @@ final class AppModel {
         relayRates = [:]
         relayPreviousSample = nil
         relaySentLimits = nil
+        relayLastReopen = nil
         relayNotice = nil
         relayError = nil
         engine.relayStopped()
         refreshProfiles()
         updateIdleTimer()
+    }
+
+    /// Le relais doit être ouvert mais ne répond plus (iOS a arrêté l'extension, par
+    /// exemple faute de mémoire) : l'app le relance, au plus toutes les 30 secondes.
+    private func reopenStoppedRelay(wasRunning: Bool) {
+        let now = Date()
+        guard relayEnabled, relayError == nil, !relayOpening, wasRunning || relayLastReopen != nil,
+              Self.shouldReopenRelay(lastAttempt: relayLastReopen, now: now)
+        else { return }
+        relayLastReopen = now
+        Task {
+            await openRelay()
+            if relayIsRunning {
+                relayNotice = "Le relais s’était arrêté : FLUXA l’a rouvert."
+            }
+        }
+    }
+
+    static func shouldReopenRelay(lastAttempt: Date?, now: Date) -> Bool {
+        guard let lastAttempt else { return true }
+        return now.timeIntervalSince(lastAttempt) >= 30
     }
 
     static func relayProblem(_ code: Int32) -> String {
@@ -547,7 +571,9 @@ final class AppModel {
 
     private func refreshRelayNow() async {
         guard let status = await relayHost.status(), status.running else {
+            let wasRunning = relayStatus != nil
             set(\.relayStatus, nil)
+            reopenStoppedRelay(wasRunning: wasRunning)
             return
         }
         let now = Date()
