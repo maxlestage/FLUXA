@@ -70,8 +70,12 @@ struct RelayView: View {
             }
 
             Section {
-                CopyRow(label: "Mandataire", value: "\(status?.address ?? RelayBridge.defaultAddress):\(RelayBridge.port)")
-                CopyRow(label: "Configuration automatique", value: RelayText.pacURL(address: status?.address))
+                CopyRow(
+                    label: "Mandataire", value: "\(status?.address ?? RelayBridge.defaultAddress):\(RelayBridge.port)",
+                    identifier: "copier-mandataire")
+                CopyRow(
+                    label: "Configuration automatique", value: RelayText.pacURL(address: status?.address),
+                    identifier: "copier-pac")
                 DisclosureGroup("Régler un appareil") {
                     ForEach(RelayText.instructions, id: \.platform) { item in
                         VStack(alignment: .leading, spacing: 4) {
@@ -215,13 +219,26 @@ private struct RelayClientRow: View {
     }
 }
 
+/// Une valeur à recopier sur l'autre appareil. Le toucher la copie ; la ligne le confirme
+/// deux secondes (coche, « Copié », vibration légère), et VoiceOver l'annonce.
 private struct CopyRow: View {
     let label: String
     let value: String
+    let identifier: String
+    @State private var copied = false
+    @State private var reset: Task<Void, Never>?
 
     var body: some View {
         Button {
             UIPasteboard.general.string = value
+            copied = true
+            AccessibilityNotification.Announcement("\(label) copié").post()
+            reset?.cancel()
+            reset = Task {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                copied = false
+            }
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(label)
@@ -233,17 +250,33 @@ private struct CopyRow: View {
                         .foregroundStyle(Theme.text)
                         .textSelection(.enabled)
                     Spacer()
-                    Image(systemName: "doc.on.doc")
+                    if copied {
+                        Text("Copié")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.down)
+                            .transition(.opacity)
+                    }
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
                         .foregroundStyle(Theme.down)
+                        .contentTransition(.symbolEffect(.replace))
                 }
             }
+            .animation(.easeOut(duration: 0.2), value: copied)
         }
-        .accessibilityLabel("\(label) : \(value). Toucher pour copier.")
+        .sensoryFeedback(.success, trigger: copied) { _, now in now }
+        .accessibilityLabel(RelayText.copyLabel(label, value: value, copied: copied))
+        .accessibilityIdentifier(identifier)
+        .onDisappear { reset?.cancel() }
     }
 }
 
 /// Les phrases du relais, séparées de l'écran pour être testées.
 enum RelayText {
+    /// Ce que VoiceOver lit d'une ligne à copier, avant et juste après la copie.
+    static func copyLabel(_ label: String, value: String, copied: Bool) -> String {
+        "\(label) : \(value). " + (copied ? "Copié." : "Toucher pour copier.")
+    }
+
     static func pacURL(address: String?) -> String {
         "http://\(address ?? RelayBridge.defaultAddress):\(RelayBridge.port)/proxy.pac"
     }
