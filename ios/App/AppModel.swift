@@ -262,7 +262,9 @@ final class AppModel {
         set(\.samples, engine.recentSamples)
         refreshSharing()
         syncRelayLimits()
-        refreshRelay()
+        if ticks % Self.relayPollInterval(screenVisible: relayScreenVisible) == 0 {
+            refreshRelay()
+        }
         let absence = engine.lastAbsence
         if absence != self.absence {
             self.absence = absence
@@ -406,6 +408,16 @@ final class AppModel {
     // MARK: Relais de partage
 
     var relayIsRunning: Bool { relayStatus?.running == true }
+
+    /// Vrai tant que l'écran du relais est affiché : son état y est relevé chaque seconde.
+    var relayScreenVisible = false
+
+    /// Secondes entre deux relevés de l'état du relais : chaque seconde à l'écran du relais,
+    /// toutes les 5 secondes sinon. Avec l'extension réseau, chaque relevé réveille un
+    /// second processus ; le débit reste juste, calculé sur le temps réellement écoulé.
+    static func relayPollInterval(screenVisible: Bool) -> Int {
+        screenVisible ? 1 : 5
+    }
 
     /// Retente l'ouverture après un échec.
     func retryRelay() {
