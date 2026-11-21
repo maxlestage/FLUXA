@@ -41,6 +41,27 @@ struct DevicesView: View {
                 ValueRow("Dernière activité", "Inconnue")
                 ValueRow("Volume par appareil", "Inconnu")
             }
+
+            // Ce qu'iOS ne fournit pas, le relais le voit pour les appareils réglés sur lui.
+            Section {
+                NavigationLink {
+                    RelayView()
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Relais de partage", systemImage: "arrow.left.arrow.right.circle")
+                        Text(
+                            model.relayIsRunning
+                                ? RelayText.dashboardSummary(clients: model.relayStatus?.clients ?? [], rates: model.relayRates)
+                                : "Relais arrêté"
+                        )
+                        .font(.footnote)
+                        .foregroundStyle(Theme.secondary)
+                    }
+                }
+                .accessibilityIdentifier("appareils-relais")
+            } footer: {
+                Text(RelayText.devicesNote)
+            }
         }
         .fluxaBackground()
         .navigationTitle("Mes appareils")
