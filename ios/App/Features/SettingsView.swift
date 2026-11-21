@@ -77,6 +77,7 @@ struct SettingsView: View {
                     Button("Effacer l’historique", role: .destructive) {
                         confirmsHistoryErase = true
                     }
+                    .accessibilityIdentifier("effacer-historique")
                     .confirmationDialog(
                         "Effacer les mesures et le journal des limites ?",
                         isPresented: $confirmsHistoryErase,
