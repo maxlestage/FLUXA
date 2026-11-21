@@ -36,7 +36,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Latence")
                 } footer: {
-                    Text("Toutes les cinq secondes, FLUXA ouvre une connexion vers cet hôte et en mesure le délai ; moins souvent en mode économie d’énergie ou données réduites. Avec le test de débit, que vous lancez vous-même, c’est le seul échange réseau de l’app.")
+                    Text("Toutes les cinq secondes, FLUXA ouvre une connexion vers cet hôte et en mesure le délai ; toutes les 15 secondes sur réseau mobile ou en mode économie d’énergie, toutes les 30 en mode données réduites. Avec le test de débit, que vous lancez vous-même, ce sont les seuls échanges de l’app pour son propre compte.")
                 }
 
                 Section {
@@ -137,7 +137,7 @@ struct SettingsView: View {
         let cadence = "toutes les \(interval) s"
         switch interval {
         case AppModel.probeIntervals.lowData: return cadence + " (données réduites)"
-        case AppModel.probeIntervals.lowPower: return cadence + " (économie d’énergie)"
+        case AppModel.probeIntervals.lowPower: return cadence + " (réseau mobile ou économie d’énergie)"
         default: return cadence
         }
     }

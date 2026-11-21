@@ -6,8 +6,8 @@ import UIKit
 /// L'état de l'app : il relie le moteur aux services du système et aux écrans.
 ///
 /// Chaque seconde, au premier plan, il relève les compteurs des interfaces et les donne
-/// au moteur. Toutes les cinq secondes, il lance une sonde de latence ; moins souvent en
-/// mode économie d'énergie ou données réduites.
+/// au moteur. Toutes les cinq secondes, il lance une sonde de latence ; moins souvent sur
+/// réseau mobile, en mode économie d'énergie ou données réduites.
 ///
 /// Une propriété observée n'est réécrite que si sa valeur change : les écrans qui la
 /// lisent ne se redessinent pas pour rien.
@@ -117,9 +117,10 @@ final class AppModel {
     }
 
     static let defaultLatencyHost = "www.apple.com"
-    /// Secondes entre deux sondes : en temps normal, en mode économie d'énergie, et en
-    /// mode données réduites.
-    static let probeIntervals = (normal: 5, lowPower: 15, lowData: 30)
+    /// Secondes entre deux sondes : en temps normal, sur un réseau facturé à l'usage (réseau
+    /// mobile : chaque sonde y réveille la radio, qui reste active plusieurs secondes), en
+    /// mode économie d'énergie, et en mode données réduites.
+    static let probeIntervals = (normal: 5, metered: 15, lowPower: 15, lowData: 30)
     private static let latencyHostKey = "latencyHost"
     private static let notifiesKey = "notifiesAutomations"
     private static let speedTestServerKey = "speedTestServer"
@@ -279,7 +280,8 @@ final class AppModel {
         }
         set(\.probeInterval, Self.probeInterval(
             lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled,
-            lowData: path.isConstrained
+            lowData: path.isConstrained,
+            metered: path.isExpensive
         ))
         if ticks % probeInterval == 1 {
             probeLatency()
@@ -288,9 +290,10 @@ final class AppModel {
 
     /// L'intervalle des sondes selon les modes du système : la sonde coûte un peu de
     /// batterie et de données, elle ralentit quand l'utilisateur demande d'économiser.
-    static func probeInterval(lowPower: Bool, lowData: Bool) -> Int {
+    static func probeInterval(lowPower: Bool, lowData: Bool, metered: Bool = false) -> Int {
         if lowData { return probeIntervals.lowData }
         if lowPower { return probeIntervals.lowPower }
+        if metered { return probeIntervals.metered }
         return probeIntervals.normal
     }
 
