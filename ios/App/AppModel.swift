@@ -72,6 +72,11 @@ final class AppModel {
     private(set) var relayDeviceProfiles: [String: String] {
         didSet { UserDefaults.standard.set(relayDeviceProfiles, forKey: Self.relayDeviceProfilesKey) }
     }
+
+    /// Le nom donné à chaque appareil relayé, par adresse.
+    private(set) var relayDeviceNames: [String: String] {
+        didSet { UserDefaults.standard.set(relayDeviceNames, forKey: Self.relayDeviceNamesKey) }
+    }
     private(set) var rules: [AutomationRule] = []
     private(set) var automationEvents: [AutomationEvent] = []
     private(set) var speedTests: [SpeedTestResult] = []
@@ -104,6 +109,7 @@ final class AppModel {
     private static let relayKey = "relayEnabled"
     private static let keepsScreenOnKey = "relayKeepsScreenOn"
     private static let relayDeviceProfilesKey = "relayDeviceProfiles"
+    private static let relayDeviceNamesKey = "relayDeviceNames"
 
     init() {
         let opened = Self.openStore()
@@ -115,6 +121,7 @@ final class AppModel {
         relayEnabled = UserDefaults.standard.bool(forKey: Self.relayKey)
         keepsScreenOnForRelay = UserDefaults.standard.object(forKey: Self.keepsScreenOnKey) as? Bool ?? true
         relayDeviceProfiles = UserDefaults.standard.dictionary(forKey: Self.relayDeviceProfilesKey) as? [String: String] ?? [:]
+        relayDeviceNames = UserDefaults.standard.dictionary(forKey: Self.relayDeviceNamesKey) as? [String: String] ?? [:]
         refreshProfiles()
         refreshAutomations()
         speedTests = engine.speedTests
@@ -484,6 +491,11 @@ final class AppModel {
             await relayHost.apply(limits)
             confirmRelayLimit()
         }
+    }
+
+    /// Nomme un appareil relayé. Un nom vide le retire : l'adresse reprend sa place.
+    func setRelayName(_ name: String, for address: String) {
+        relayDeviceNames[address] = RelayText.cleanName(name)
     }
 
     /// Le profil d'un appareil relayé. `nil` : plus de plafond propre à l'appareil.

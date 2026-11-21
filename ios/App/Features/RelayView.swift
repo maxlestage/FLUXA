@@ -105,17 +105,18 @@ struct RelayView: View {
                 ForEach(clients) { client in
                     RelayClientRow(
                         client: client,
+                        name: model.relayDeviceNames[client.address],
                         rate: model.relayRates[client.address],
                         profileID: model.relayDeviceProfiles[client.address],
-                        profiles: model.profiles
-                    ) { profileID in
-                        model.setRelayProfile(profileID, for: client.address)
-                    }
+                        profiles: model.profiles,
+                        choose: { profileID in model.setRelayProfile(profileID, for: client.address) },
+                        rename: { name in model.setRelayName(name, for: client.address) }
+                    )
                 }
             } header: {
                 Text("Appareils relayés")
             } footer: {
-                Text("Chaque appareil est reconnu par son adresse sur le partage. Un plafond propre à l’appareil s’ajoute au plafond de tout le trafic.")
+                Text("Chaque appareil est reconnu par son adresse sur le partage, que l’iPhone peut lui changer d’une connexion à l’autre : son nom et son plafond suivent l’adresse. Un plafond propre à l’appareil s’ajoute au plafond de tout le trafic.")
             }
         }
         .fluxaBackground()
@@ -126,20 +127,39 @@ struct RelayView: View {
 
 private struct RelayClientRow: View {
     let client: RelayStatus.Client
+    let name: String?
     let rate: RelayRate?
     let profileID: String?
     let profiles: [Profile]
     let choose: (String?) -> Void
+    let rename: (String) -> Void
+    @State private var renaming = false
+    @State private var draft = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(client.address)
-                    .font(.body.monospaced())
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(RelayText.displayName(name, address: client.address))
+                        .font(name == nil ? .body.monospaced() : .body.weight(.medium))
+                    if name != nil {
+                        Text(client.address)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(Theme.tertiary)
+                    }
+                }
                 Spacer()
                 Text(RelayText.connections(client.connections))
                     .font(.caption)
                     .foregroundStyle(Theme.tertiary)
+                Button {
+                    draft = name ?? ""
+                    renaming = true
+                } label: {
+                    Image(systemName: "pencil")
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Nommer \(RelayText.displayName(name, address: client.address))")
             }
             Text("↓ \(Format.rate(rate?.toDeviceBps)) · ↑ \(Format.rate(rate?.fromDeviceBps))")
                 .font(.subheadline.monospacedDigit())
@@ -156,6 +176,13 @@ private struct RelayClientRow: View {
         }
         .padding(.vertical, 2)
         .accessibilityIdentifier("appareil-relaye")
+        .alert("Nom de l’appareil", isPresented: $renaming) {
+            TextField(client.address, text: $draft)
+            Button("Enregistrer") { rename(draft) }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Un nom pour \(client.address), gardé sur cet iPhone. Laissez vide pour revenir à l’adresse.")
+        }
     }
 }
 
@@ -208,6 +235,17 @@ enum RelayText {
             return "Le relais tourne dans l’app : il s’arrête quand FLUXA passe en arrière-plan et se rouvre à votre retour."
         }
         return "À la première ouverture, iOS demande d’autoriser la configuration du relais : elle le garde en service quand FLUXA est en arrière-plan."
+    }
+
+    /// Le nom d'un appareil relayé, ou son adresse s'il n'en a pas.
+    static func displayName(_ name: String?, address: String) -> String {
+        cleanName(name ?? "") ?? address
+    }
+
+    /// Un nom saisi, sans espaces superflus et limité à 40 caractères. `nil` s'il est vide.
+    static func cleanName(_ name: String) -> String? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : String(trimmed.prefix(40))
     }
 
     static func connections(_ count: Int) -> String {
