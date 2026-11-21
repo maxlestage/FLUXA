@@ -290,6 +290,17 @@ final class FluxaUITests: XCTestCase {
         XCTAssertTrue(element(containing: "aucun profil").exists)
     }
 
+    func testTheDevicesLeadToTheRelay() {
+        launch(["-fluxaScreen", "appareils"])
+        XCTAssertTrue(app.navigationBars["Mes appareils"].waitForExistence(timeout: 30))
+        // Ce qu'iOS ne fournit pas, le relais le voit pour les appareils réglés sur lui.
+        let relay = app.buttons["appareils-relais"]
+        XCTAssertTrue(scroll(to: relay))
+        relay.tap()
+        XCTAssertTrue(app.navigationBars["Relais de partage"].waitForExistence(timeout: 10))
+        assertNoError()
+    }
+
     func testADeviceWithoutNameIsRefused() {
         launch(["-fluxaScreen", "appareils"])
         XCTAssertTrue(app.navigationBars["Mes appareils"].waitForExistence(timeout: 30))
