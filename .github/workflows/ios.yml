@@ -135,6 +135,7 @@ jobs:
           shot 12-forfait -fluxaScreen forfait
           shot 14-relais -fluxaScreen relais
           shot 15-widgets -fluxaScreen widgets
+          shot 16-autorisations -fluxaScreen autorisations
           shot 13-accueil -fluxaTab reseau NO
       - uses: actions/upload-artifact@v4
         if: always()

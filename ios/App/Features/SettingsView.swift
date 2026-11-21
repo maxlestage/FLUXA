@@ -115,6 +115,12 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
+                        PermissionsView()
+                    } label: {
+                        Label("Autorisations", systemImage: "hand.raised")
+                    }
+                    .accessibilityIdentifier("reglage-autorisations")
+                    NavigationLink {
                         WidgetsView()
                     } label: {
                         Label("Widgets et Dynamic Island", systemImage: "rectangle.3.group")
