@@ -365,6 +365,12 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayText.cap(nil), "Sans plafond")
         XCTAssertEqual(RelayText.cap(BandwidthPolicy(downloadBps: 5_000_000)), "↓ 5\(space)Mb/s · ↑ Sans plafond")
         XCTAssertEqual(RelayText.connections(0), "inactif")
+        // Un appareil nommé garde son nom ; sinon, son adresse.
+        XCTAssertEqual(RelayText.displayName("  MacBook de Léa  ", address: "172.20.10.3"), "MacBook de Léa")
+        XCTAssertEqual(RelayText.displayName(nil, address: "172.20.10.3"), "172.20.10.3")
+        XCTAssertEqual(RelayText.displayName("   ", address: "172.20.10.3"), "172.20.10.3")
+        XCTAssertNil(RelayText.cleanName(" \n "))
+        XCTAssertEqual(RelayText.cleanName(String(repeating: "a", count: 60))?.count, 40)
         XCTAssertEqual(RelayText.connections(2), "2 connexions")
         XCTAssertTrue(AppModel.relayProblem(EADDRINUSE).contains("8888"))
     }
