@@ -19,7 +19,7 @@ final class WidgetPublisher {
     /// Enregistre le relevé ; rafraîchit les widgets si leur allure change, s'il le faut
     /// (`force`, au passage en arrière-plan), ou au plus tous les quarts d'heure.
     func publish(_ snapshot: WidgetSnapshot, force: Bool = false) {
-        guard snapshot.save() else { return }
+        guard snapshot.publish() else { return }
         let shape = Shape(isOnline: snapshot.isOnline, hasPlan: snapshot.plan != nil, relayDevices: snapshot.relay?.devices)
         let now = Date()
         if Self.shouldReload(force: force, shapeChanged: shape != lastShape, lastReload: lastReload, now: now) {

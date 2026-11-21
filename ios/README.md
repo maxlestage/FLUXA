@@ -125,8 +125,8 @@ Ce qu'il faut savoir :
 ## Widgets et Dynamic Island
 
 Les widgets affichent le volume du jour, le débit et le forfait. Ils ne mesurent rien eux-mêmes :
-l'app leur laisse son dernier relevé dans un conteneur partagé (groupe d'apps
-`group.<identifiant de l'app>`), et ils en indiquent l'heure. L'app les fait rafraîchir quand
+l'app leur laisse son dernier relevé dans un trousseau partagé (`<équipe>.fluxa.shared`, autorisé
+d'office pour les apps de l'équipe, sans réglage sur le portail Apple), et ils en indiquent l'heure. L'app les fait rafraîchir quand
 leur allure change, au passage en arrière-plan, et au plus tous les quarts d'heure sinon.
 
 Quand le relais de partage est ouvert, une activité en direct le montre sur l'écran verrouillé
