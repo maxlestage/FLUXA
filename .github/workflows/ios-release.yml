@@ -72,10 +72,11 @@ jobs:
         working-directory: ios
         run: |
           set -euo pipefail
-          # L'archive est signée sans certificat (signature locale « - », droits compris) :
-          # chaque machine neuve créait sinon un certificat de développement, et le compte en
-          # a un nombre limité. La signature de distribution se fait à l'export, avec le
-          # certificat géré par Apple. Le numéro de build suit celui du workflow.
+          # L'archive n'est pas signée : chaque machine neuve créait sinon un certificat de
+          # développement, et le compte en a un nombre limité (la signature locale « - » est
+          # refusée pour iOS 27). La signature de distribution se fait à l'export, avec le
+          # certificat géré par Apple ; l'étape suivante vérifie les droits obtenus. Le
+          # numéro de build suit celui du workflow.
           xcodebuild archive \
             -project Fluxa.xcodeproj -scheme Fluxa -configuration Release \
             -destination 'generic/platform=iOS' \
@@ -83,10 +84,8 @@ jobs:
             FLUXA_BUNDLE_ID="$BUNDLE_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             AppIdentifierPrefix="$TEAM_ID." \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            PROVISIONING_PROFILE_SPECIFIER= \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
       - name: Sign for distribution and check the entitlements
         working-directory: ios
