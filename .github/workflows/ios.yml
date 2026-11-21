@@ -78,15 +78,23 @@ jobs:
         timeout-minutes: 15
         run: |
           set -euxo pipefail
+          # Un iPhone ordinaire, à un écran (de préférence un modèle Pro), sur le plus récent
+          # iOS : les modèles à deux écrans (« Duo », « Fold ») changent l'interface.
           device=$(xcrun simctl list devices available -j | python3 -c "
-          import json, sys
+          import json, re, sys
           runtimes = json.load(sys.stdin)['devices']
-          for runtime in sorted((r for r in runtimes if 'iOS' in r), reverse=True):
-              for device in runtimes[runtime]:
-                  if device['name'].startswith('iPhone'):
-                      print(runtime, device['name'], file=sys.stderr)
-                      print(device['udid'])
-                      sys.exit(0)
+          def rank(name):
+              if re.fullmatch(r'iPhone \d+ Pro', name): return 0
+              if re.fullmatch(r'iPhone \d+', name): return 1
+              if re.search(r'Duo|Fold|Flip', name): return 9
+              return 2
+          for runtime in sorted((r for r in runtimes if 'SimRuntime.iOS-' in r), reverse=True):
+              phones = [d for d in runtimes[runtime] if d['name'].startswith('iPhone') and rank(d['name']) < 9]
+              if phones:
+                  best = min(phones, key=lambda d: (rank(d['name']), d['name']))
+                  print(runtime, best['name'], file=sys.stderr)
+                  print(best['udid'])
+                  sys.exit(0)
           sys.exit('no iPhone simulator')
           ")
           xcrun simctl boot "$device"
@@ -115,12 +123,16 @@ jobs:
           # Le tableau de bord, assez longtemps pour qu'une minute entre dans l'historique.
           xcrun simctl launch "$DEVICE" app.fluxa.ios -hasSeenWelcome YES
           sleep 75
-          xcrun simctl io "$DEVICE" screenshot screenshots/1-tableau-de-bord.png
+          snap() {
+            xcrun simctl io "$DEVICE" screenshot --display=internal "$1" 2>/dev/null \
+              || xcrun simctl io "$DEVICE" screenshot "$1"
+          }
+          snap screenshots/1-tableau-de-bord.png
           shot() {
             xcrun simctl terminate "$DEVICE" app.fluxa.ios || true
             xcrun simctl launch "$DEVICE" app.fluxa.ios -hasSeenWelcome "${4:-YES}" "$2" "$3"
             sleep 6
-            xcrun simctl io "$DEVICE" screenshot "screenshots/$1.png"
+            snap "screenshots/$1.png"
           }
           shot 2-mon-reseau -fluxaScreen reseau
           shot 3-partage -fluxaTab partage
