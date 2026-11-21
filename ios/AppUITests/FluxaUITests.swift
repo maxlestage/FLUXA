@@ -124,6 +124,17 @@ final class FluxaUITests: XCTestCase {
         assertNoError()
     }
 
+    func testTheDashboardStaysReadableWithLargeText() {
+        launch(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"])
+        XCTAssertTrue(app.navigationBars["Tableau de bord"].waitForExistence(timeout: 30))
+        let throughput = app.descendants(matching: .any)["debit"]
+        XCTAssertTrue(throughput.waitForExistence(timeout: 10))
+        // Les mesures, sur une colonne, restent atteignables en faisant défiler.
+        XCTAssertTrue(scroll(to: element(containing: "Latence"), swipes: 12))
+        XCTAssertTrue(scroll(to: element(containing: "Aujourd"), swipes: 12))
+        assertNoError()
+    }
+
     func testEveryTabOpens() {
         launch()
         XCTAssertTrue(app.navigationBars["Tableau de bord"].waitForExistence(timeout: 30))
