@@ -39,15 +39,15 @@ final class FluxaUITests: XCTestCase {
     /// soit à l'écran. De grands balayages dépassaient parfois la cible sous iOS 27.
     @discardableResult
     private func scroll(to element: XCUIElement, swipes: Int = 10) -> Bool {
+        let screen = app.windows.firstMatch.frame
         for _ in 0..<(swipes * 2) {
-            if isOnScreen(element) { return true }
-            let screen = app.windows.firstMatch.frame
+            if isOnScreen(element, in: screen) { return true }
             let goingDown = !(element.exists && element.frame.maxY > 0 && element.frame.midY < screen.minY + 110)
             let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: goingDown ? 0.68 : 0.32))
             let to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: goingDown ? 0.36 : 0.64))
             from.press(forDuration: 0.05, thenDragTo: to)
         }
-        return isOnScreen(element)
+        return isOnScreen(element, in: screen)
     }
 
     /// Un bouton par son libellé, où qu'il soit : sous iOS 27, les boutons des barres de
@@ -64,9 +64,9 @@ final class FluxaUITests: XCTestCase {
 
     /// Visible et touchable : ni sous la barre de navigation, ni sous la barre d'onglets,
     /// qui flotte par-dessus le bas de la page.
-    private func isOnScreen(_ element: XCUIElement) -> Bool {
+    private func isOnScreen(_ element: XCUIElement, in screen: CGRect? = nil) -> Bool {
         guard element.exists, element.isHittable else { return false }
-        let screen = app.windows.firstMatch.frame
+        let screen = screen ?? app.windows.firstMatch.frame
         let middle = element.frame.midY
         return middle > screen.minY + 110 && middle < screen.maxY - 130
     }
@@ -537,9 +537,11 @@ final class FluxaUITests: XCTestCase {
     func testTheHistoryCanBeErased() {
         launch(["-fluxaTab", "reglages"])
         XCTAssertTrue(app.navigationBars["Réglages"].waitForExistence(timeout: 30))
-        let erase = button(startingWith: "Effacer l")
-        XCTAssertTrue(scroll(to: erase.firstMatch))
-        erase.firstMatch.tap()
+        // Un identifiant direct : chercher parmi tous les boutons d'un long formulaire, à
+        // chaque pas de défilement, dépassait le délai d'iOS 27.
+        let erase = app.buttons["effacer-historique"]
+        XCTAssertTrue(scroll(to: erase))
+        erase.tap()
         XCTAssertTrue(element(containing: "Vos profils et votre forfait sont conservés").waitForExistence(timeout: 5))
         // La confirmation propose le même libellé. Le bouton de la page est masqué par elle :
         // celui qu'on peut toucher est le sien.
