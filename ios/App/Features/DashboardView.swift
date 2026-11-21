@@ -296,6 +296,15 @@ private struct SharingCard: View {
                         .font(.footnote)
                         .foregroundStyle(Theme.secondary)
                 }
+                if model.relayIsRunning {
+                    Label(
+                        RelayText.dashboardSummary(clients: model.relayStatus?.clients ?? [], rates: model.relayRates),
+                        systemImage: "arrow.left.arrow.right.circle"
+                    )
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(Theme.down)
+                    .accessibilityIdentifier("resume-relais")
+                }
             }
         }
         .accessibilityElement(children: .combine)
