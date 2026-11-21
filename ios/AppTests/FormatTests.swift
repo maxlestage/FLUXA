@@ -382,6 +382,26 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayActivityText.rate(nil), "—", "un débit non mesuré reste un tiret")
     }
 
+    func testABackgroundWakeUpGivesTheActivityFreshFigures() throws {
+        func status(_ clients: [(String, Int, UInt64)]) -> RelayStatus {
+            let list = clients.map { address, connections, bytes in
+                "{\"address\":\"\(address)\",\"connections\":\(connections),\"to_device_bytes\":\(bytes),\"from_device_bytes\":0,\"idle_seconds\":0,\"download_limit\":0,\"upload_limit\":0}"
+            }.joined(separator: ",")
+            return RelayStatus.decode("{\"running\":true,\"clients\":[\(list)]}")!
+        }
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = status([("172.20.10.3", 2, 1_000_000), ("172.20.10.4", 0, 500)])
+        let second = status([("172.20.10.3", 2, 1_400_000), ("172.20.10.4", 0, 500), ("172.20.10.5", 1, 9_000)])
+        let state = AppModel.relayActivityState(first: first, second: second, seconds: 1, cap: "Sans plafond", now: now)
+        // Deux appareils actifs ; le débit vient du seul appareil vu aux deux relevés.
+        XCTAssertEqual(state.devices, 2)
+        XCTAssertEqual(state.toDevicesBps, 3_200_000)
+        XCTAssertEqual(state.updatedAt, now)
+        // Sans écart mesurable, pas de débit inventé.
+        let idle = AppModel.relayActivityState(first: second, second: second, seconds: 0, cap: "Sans plafond", now: now)
+        XCTAssertNil(idle.toDevicesBps)
+    }
+
     func testWidgetsAndTheActivityAreRefreshedSparingly() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         XCTAssertTrue(WidgetPublisher.shouldReload(force: false, shapeChanged: false, lastReload: nil, now: now))

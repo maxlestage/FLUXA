@@ -1,3 +1,4 @@
+import BackgroundTasks
 import FluxaCore
 import SwiftUI
 
@@ -15,6 +16,10 @@ struct FluxaApp: App {
                 .tint(Theme.down)
                 // `start` ne fait rien si la mesure tourne déjà.
                 .task { model.start() }
+        }
+        // Quand iOS réveille l'app en arrière-plan : l'activité du relais est mise à jour.
+        .backgroundTask(.appRefresh(AppModel.relayRefreshIdentifier)) {
+            await model.refreshRelayInBackground()
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
