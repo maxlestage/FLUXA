@@ -52,6 +52,9 @@ final class AppModel {
     private(set) var relayNotice: String?
     private var relayHost: any RelayHost = AppModel.preferredRelayHost()
     private var relayOpening = false
+    /// Les plafonds donnés au relais en dernier, pour le resynchroniser quand le plafond
+    /// affiché change par un autre chemin (automatisation, échéance, profil modifié).
+    private var relaySentLimits: RelayLimits?
     private var relayRefreshing = false
     private var relayPreviousSample: (date: Date, clients: [String: RelayStatus.Client])?
 
@@ -236,6 +239,7 @@ final class AppModel {
         set(\.snapshot, snapshot)
         set(\.samples, engine.recentSamples)
         refreshSharing()
+        syncRelayLimits()
         refreshRelay()
         let absence = engine.lastAbsence
         if absence != self.absence {
@@ -407,11 +411,12 @@ final class AppModel {
         defer { relayOpening = false }
         relayPreviousSample = nil
         relayRates = [:]
-        var problem = await relayHost.open(limits: relayLimits())
+        let limits = relayLimits()
+        var problem = await relayHost.open(limits: limits)
         if let failure = problem, relayHost.keepsRunningInBackground {
             // L'extension n'a pas démarré : le relais tourne dans l'app, au premier plan.
             relayHost = InAppRelayHost(allowLoopback: false)
-            problem = await relayHost.open(limits: relayLimits())
+            problem = await relayHost.open(limits: limits)
             relayNotice = problem == nil
                 ? "\(failure) Le relais tourne dans l’app : gardez FLUXA ouvert."
                 : nil
@@ -420,6 +425,7 @@ final class AppModel {
         }
         relayError = problem
         if problem == nil {
+            relaySentLimits = limits
             confirmRelayLimit()
         }
         await refreshRelayNow()
@@ -429,7 +435,9 @@ final class AppModel {
     /// Reprend un relais resté en service dans l'extension pendant que l'app était fermée.
     private func resumeRelay() async {
         if await relayHost.isRunning() {
-            await relayHost.apply(relayLimits())
+            let limits = relayLimits()
+            await relayHost.apply(limits)
+            relaySentLimits = limits
             confirmRelayLimit()
             await refreshRelayNow()
             updateIdleTimer()
@@ -445,6 +453,7 @@ final class AppModel {
         relayStatus = nil
         relayRates = [:]
         relayPreviousSample = nil
+        relaySentLimits = nil
         relayNotice = nil
         relayError = nil
         engine.relayStopped()
@@ -487,6 +496,7 @@ final class AppModel {
     private func applyRelayLimits() {
         guard relayIsRunning else { return }
         let limits = relayLimits()
+        relaySentLimits = limits
         Task {
             await relayHost.apply(limits)
             confirmRelayLimit()
@@ -507,7 +517,22 @@ final class AppModel {
         if profileID == nil {
             limits.devices[address] = (nil, nil)
         }
+        relaySentLimits = relayLimits()
         Task { await relayHost.apply(limits) }
+    }
+
+    /// Si le plafond affiché a changé sans passer par le relais (règle qui change de
+    /// profil, limite arrivée à échéance, profil actif modifié), le relais le reçoit :
+    /// l'app n'affiche jamais un plafond que le relais n'applique pas.
+    private func syncRelayLimits() {
+        guard relayIsRunning, !relayOpening else { return }
+        if Self.relayNeedsUpdate(sent: relaySentLimits, wanted: relayLimits()) {
+            applyRelayLimits()
+        }
+    }
+
+    static func relayNeedsUpdate(sent: RelayLimits?, wanted: RelayLimits) -> Bool {
+        sent != wanted
     }
 
     /// Relève l'état du relais, sans chevaucher le relevé précédent.
