@@ -45,9 +45,9 @@ targets:
       properties:
         com.apple.developer.networking.networkextension:
           - packet-tunnel-provider
-        # Le conteneur partagé avec les widgets, pour leur laisser le dernier relevé.
-        com.apple.security.application-groups:
-          - group.$(FLUXA_BUNDLE_ID)
+        # Le trousseau partagé avec les widgets, pour leur laisser le dernier relevé.
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)fluxa.shared
     info:
       path: App/Info.plist
       properties:
@@ -65,7 +65,7 @@ targets:
           - UIInterfaceOrientationPortrait
         # L'activité en direct du relais (écran verrouillé, Dynamic Island).
         NSSupportsLiveActivities: true
-        FluxaAppGroup: group.$(FLUXA_BUNDLE_ID)
+        FluxaKeychainGroup: $(AppIdentifierPrefix)fluxa.shared
         # Le relais de partage reçoit les connexions des appareils reliés à l'iPhone.
         NSLocalNetworkUsageDescription: FLUXA reçoit les connexions des appareils reliés à votre partage de connexion pour relayer, mesurer et plafonner leur trafic.
         # L'app n'utilise que le chiffrement du système (TLS).
@@ -116,7 +116,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
 
   # Les widgets (écran d'accueil, écran verrouillé) et l'activité en direct du relais. Ils
-  # affichent le dernier relevé que l'app laisse dans le conteneur partagé.
+  # affichent le dernier relevé que l'app laisse dans le trousseau partagé.
   FluxaWidgets:
     type: app-extension
     platform: iOS
@@ -136,14 +136,14 @@ targets:
         CFBundleDisplayName: FLUXA
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        FluxaAppGroup: group.$(FLUXA_BUNDLE_ID)
+        FluxaKeychainGroup: $(AppIdentifierPrefix)fluxa.shared
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
       path: Widgets/FluxaWidgets.entitlements
       properties:
-        com.apple.security.application-groups:
-          - group.$(FLUXA_BUNDLE_ID)
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)fluxa.shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(FLUXA_BUNDLE_ID).widgets
