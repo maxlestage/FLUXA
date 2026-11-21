@@ -447,6 +447,18 @@ final class FluxaUITests: XCTestCase {
         assertNoError()
     }
 
+    func testSettingsShowTheBuildAndTheCredits() {
+        launch(["-fluxaTab", "reglages"])
+        XCTAssertTrue(app.navigationBars["Réglages"].waitForExistence(timeout: 30))
+        XCTAssertTrue(scroll(to: app.descendants(matching: .any)["numero-build"].firstMatch, swipes: 14))
+        let credits = app.descendants(matching: .any)["reglage-credits"]
+        XCTAssertTrue(scroll(to: credits))
+        credits.tap()
+        XCTAssertTrue(app.navigationBars["Crédits"].waitForExistence(timeout: 10))
+        XCTAssertTrue(element(containing: "Maxime Nathan Lestage").exists)
+        XCTAssertTrue(element(containing: "build").exists)
+    }
+
     func testThePermissionsAreReachableFromSettings() {
         launch(["-fluxaTab", "reglages"])
         XCTAssertTrue(app.navigationBars["Réglages"].waitForExistence(timeout: 30))
