@@ -1187,7 +1187,7 @@ pub fn privacy(ctx: &Ctx) -> Page {
             Block::Title("reseau", "Ce que l’app échange sur le réseau"),
             Block::Text("Pour mesurer, l’app fait deux échanges, et seulement ceux-là :"),
             Block::List(&[
-                "<strong>La sonde de latence.</strong> Quand l’app est ouverte, elle ouvre toutes les cinq secondes une connexion vers un hôte (www.apple.com par défaut, modifiable dans les réglages) et en mesure le délai. Aucune donnée n’y est envoyée ; l’hôte voit votre adresse IP, comme tout site que vous visitez.",
+                "<strong>La sonde de latence.</strong> Quand l’app est ouverte, elle ouvre une connexion vers un hôte toutes les cinq secondes (toutes les 15 secondes sur réseau mobile ou en mode économie d’énergie, toutes les 30 en mode données réduites) (www.apple.com par défaut, modifiable dans les réglages) et en mesure le délai. Aucune donnée n’y est envoyée ; l’hôte voit votre adresse IP, comme tout site que vous visitez.",
                 "<strong>Le test de débit.</strong> Il ne part que lorsque vous le lancez. Il télécharge et envoie des données de test sans contenu, avec un serveur de test (speed.cloudflare.com par défaut, modifiable dans les réglages), qui voit votre adresse IP.",
             ]),
             Block::Text("Les mesures qui en résultent restent sur l’iPhone."),
