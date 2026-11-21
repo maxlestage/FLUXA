@@ -407,6 +407,13 @@ final class AppModel {
 
     var relayIsRunning: Bool { relayStatus?.running == true }
 
+    /// Retente l'ouverture après un échec.
+    func retryRelay() {
+        relayEnabled = true
+        relayError = nil
+        Task { await openRelay() }
+    }
+
     /// Vrai si le relais en service continue en arrière-plan (extension réseau).
     var relayRunsInBackground: Bool { relayIsRunning && relayHost.keepsRunningInBackground }
 
@@ -439,16 +446,33 @@ final class AppModel {
         relayPreviousSample = nil
         relayRates = [:]
         let limits = relayLimits()
+        // Chaque ouverture retente l'extension réseau, même après un repli dans l'app, et
+        // libère d'abord le port qu'un relais de l'app tiendrait encore.
+        relayHost = Self.preferredRelayHost()
+        if relayHost.keepsRunningInBackground {
+            RelayBridge.stop()
+        }
         var problem = await relayHost.open(limits: limits)
+        relayNotice = nil
         if let failure = problem, relayHost.keepsRunningInBackground {
-            // L'extension n'a pas démarré : le relais tourne dans l'app, au premier plan.
-            relayHost = InAppRelayHost(allowLoopback: false)
-            problem = await relayHost.open(limits: limits)
-            relayNotice = problem == nil
-                ? "\(failure) Le relais tourne dans l’app : gardez FLUXA ouvert."
-                : nil
-        } else {
-            relayNotice = nil
+            if await relayHost.isRunning() {
+                // L'extension a fini par démarrer : c'est elle qui sert.
+                await relayHost.apply(limits)
+                problem = nil
+            } else {
+                // L'extension n'a pas démarré : le relais tourne dans l'app, au premier plan.
+                let tunnel = relayHost
+                relayHost = InAppRelayHost(allowLoopback: false)
+                problem = await relayHost.open(limits: limits)
+                if problem == Self.relayProblem(EADDRINUSE), await tunnel.isRunning() {
+                    // Le port est pris par l'extension, démarrée entre-temps : on la reprend.
+                    relayHost = tunnel
+                    await tunnel.apply(limits)
+                    problem = nil
+                } else if problem == nil {
+                    relayNotice = "\(failure) Le relais tourne dans l’app : gardez FLUXA ouvert."
+                }
+            }
         }
         relayError = problem
         if problem == nil {
@@ -463,6 +487,12 @@ final class AppModel {
 
     /// Reprend un relais resté en service dans l'extension pendant que l'app était fermée.
     private func resumeRelay() async {
+        // L'extension a pu rester en service, ou démarrer, pendant que l'app était fermée :
+        // elle passe avant un éventuel repli dans l'app.
+        let preferred = Self.preferredRelayHost()
+        if preferred.keepsRunningInBackground, await preferred.isRunning() {
+            relayHost = preferred
+        }
         if await relayHost.isRunning() {
             let limits = relayLimits()
             await relayHost.apply(limits)
