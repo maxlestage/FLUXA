@@ -96,7 +96,7 @@ extension Capability {
         case .speedTest: "Tester le débit Internet"
         case .charts: "Tracer les graphiques et l’historique"
         case .profiles: "Gérer des profils de débit"
-        case .localVPN: "Créer un VPN local facultatif"
+        case .localVPN: "Garder le relais en arrière-plan"
         case .hotspotActivation: "Activer le partage depuis une app"
         case .hotspotClientDiscovery: "Identifier les appareils connectés"
         case .hotspotLimit: "Limiter le débit du partage"
