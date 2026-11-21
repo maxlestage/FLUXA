@@ -30,7 +30,7 @@ concurrency:
 jobs:
   testflight:
     name: TestFlight
-    runs-on: macos-latest
+    runs-on: xcode-27
     timeout-minutes: 45
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
