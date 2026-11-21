@@ -416,6 +416,29 @@ final class FluxaUITests: XCTestCase {
         assertNoError()
     }
 
+    // MARK: Autorisations
+
+    func testThePermissionsScreenListsWhatFluxaUses() {
+        launch(["-fluxaScreen", "autorisations"])
+        XCTAssertTrue(app.navigationBars["Autorisations"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.descendants(matching: .any)["tout-autoriser"].waitForExistence(timeout: 10))
+        for kind in ["localNetwork", "vpn", "notifications", "liveActivities", "backgroundRefresh", "cellularData"] {
+            XCTAssertTrue(
+                scroll(to: app.descendants(matching: .any)["autorisation-\(kind)"].firstMatch, swipes: 6),
+                "ligne absente : \(kind)")
+        }
+        assertNoError()
+    }
+
+    func testThePermissionsAreReachableFromSettings() {
+        launch(["-fluxaTab", "reglages"])
+        XCTAssertTrue(app.navigationBars["Réglages"].waitForExistence(timeout: 30))
+        let link = app.descendants(matching: .any)["reglage-autorisations"]
+        XCTAssertTrue(scroll(to: link))
+        link.tap()
+        XCTAssertTrue(app.navigationBars["Autorisations"].waitForExistence(timeout: 10))
+    }
+
     // MARK: Widgets et Dynamic Island
 
     func testTheWidgetsAndTheIslandCanBePreviewed() {
