@@ -486,6 +486,27 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 2, "jamais moins de deux secondes")
     }
 
+    func testVoiceOverSummarisesTheHistoryChart() {
+        let space = "\u{00A0}"
+        func aggregate(_ minute: Double, down: Double, up: Double, peak: Double, samples: Int) -> Aggregate {
+            Aggregate(
+                start: Date(timeIntervalSince1970: minute * 60), averageDownloadBps: down, averageUploadBps: up,
+                peakDownloadBps: peak, peakUploadBps: up * 2, receivedBytes: 0, sentBytes: 0, sampleCount: samples)
+        }
+        XCTAssertEqual(HistoryView.chartSummary([]), "Aucune mesure sur la période.")
+        XCTAssertEqual(
+            HistoryView.chartSummary([aggregate(0, down: 9_000_000, up: 1_000_000, peak: 12_000_000, samples: 0)]),
+            "Aucune mesure sur la période.")
+        // La moyenne pondère par le nombre de mesures : (10 × 3 + 2 × 1) / 4 = 8 Mb/s.
+        let summary = HistoryView.chartSummary([
+            aggregate(0, down: 10_000_000, up: 1_000_000, peak: 20_000_000, samples: 3),
+            aggregate(1, down: 2_000_000, up: 1_000_000, peak: 5_000_000, samples: 1),
+        ])
+        XCTAssertEqual(
+            summary,
+            "Descendant : 8,0\(space)Mb/s en moyenne, pic à 20,0\(space)Mb/s. Montant : 1,0\(space)Mb/s en moyenne, pic à 2,0\(space)Mb/s.")
+    }
+
     func testTheDevicesScreenSaysWhatTheRelaySeesAndNoMore() {
         XCTAssertTrue(RelayText.devicesNote.contains("réglés sur lui"))
         XCTAssertTrue(RelayText.devicesNote.contains("restent invisibles"))

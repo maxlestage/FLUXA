@@ -1,3 +1,4 @@
+import Accessibility
 import Charts
 import CoreTransferable
 import FluxaCore
@@ -250,6 +251,61 @@ struct HistoryView: View {
         }
         .frame(height: 200)
         .accessibilityLabel("Débit moyen descendant et montant sur la période")
+        .accessibilityValue(Self.chartSummary(aggregates))
+        .accessibilityChartDescriptor(HistoryChartDescriptor(aggregates: aggregates, summary: Self.chartSummary(aggregates)))
+    }
+
+    /// Ce que VoiceOver dit du graphique : moyenne et pic de chaque sens, comme le bilan
+    /// de la période. La moyenne pondère chaque intervalle par son nombre de mesures.
+    static func chartSummary(_ aggregates: [Aggregate]) -> String {
+        let measured = aggregates.filter { $0.sampleCount > 0 }
+        guard !measured.isEmpty else { return "Aucune mesure sur la période." }
+        let samples = Double(measured.reduce(0) { $0 + $1.sampleCount })
+        func average(_ value: (Aggregate) -> Double) -> Double {
+            measured.reduce(0.0) { $0 + value($1) * Double($1.sampleCount) } / samples
+        }
+        let download = average { $0.averageDownloadBps }
+        let upload = average { $0.averageUploadBps }
+        let peakDownload = measured.map { $0.peakDownloadBps }.max() ?? 0
+        let peakUpload = measured.map { $0.peakUploadBps }.max() ?? 0
+        return "Descendant : \(Format.rate(download)) en moyenne, pic à \(Format.rate(peakDownload)). "
+            + "Montant : \(Format.rate(upload)) en moyenne, pic à \(Format.rate(peakUpload))."
+    }
+}
+
+/// Le graphique de l'historique pour les graphiques audio de VoiceOver : un point par
+/// intervalle, débit moyen descendant (barres) et montant (ligne), en Mb/s.
+private struct HistoryChartDescriptor: AXChartDescriptorRepresentable {
+    let aggregates: [Aggregate]
+    let summary: String
+
+    func makeChartDescriptor() -> AXChartDescriptor {
+        let times = aggregates.map { $0.start.timeIntervalSince1970 }
+        let first = times.min() ?? 0
+        let last = max(times.max() ?? 1, first)
+        let xAxis = AXNumericDataAxisDescriptor(
+            title: "Heure", range: first...last, gridlinePositions: []
+        ) { value in
+            Date(timeIntervalSince1970: value).formatted(date: .abbreviated, time: .shortened)
+        }
+        let highest = aggregates.map { max($0.averageDownloadBps, $0.averageUploadBps) }.max() ?? 0
+        let yAxis = AXNumericDataAxisDescriptor(
+            title: "Débit", range: 0...max(highest / 1_000_000, 1), gridlinePositions: []
+        ) { value in
+            Format.rate(value * 1_000_000)
+        }
+        let download = AXDataSeriesDescriptor(
+            name: "Descendant", isContinuous: false,
+            dataPoints: aggregates.map { AXDataPoint(x: $0.start.timeIntervalSince1970, y: $0.averageDownloadBps / 1_000_000) }
+        )
+        let upload = AXDataSeriesDescriptor(
+            name: "Montant", isContinuous: true,
+            dataPoints: aggregates.map { AXDataPoint(x: $0.start.timeIntervalSince1970, y: $0.averageUploadBps / 1_000_000) }
+        )
+        return AXChartDescriptor(
+            title: "Débit moyen sur la période", summary: summary,
+            xAxis: xAxis, yAxis: yAxis, additionalAxes: [], series: [download, upload]
+        )
     }
 }
 
