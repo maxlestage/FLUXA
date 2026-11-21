@@ -277,7 +277,10 @@ final class FormatTests: XCTestCase {
         // Le mode données réduites l'emporte : c'est lui qui compte les octets.
         XCTAssertEqual(AppModel.probeInterval(lowPower: true, lowData: true), 30)
         XCTAssertEqual(SettingsView.probeCadence(5), "toutes les 5 s")
-        XCTAssertEqual(SettingsView.probeCadence(15), "toutes les 15 s (économie d’énergie)")
+        XCTAssertEqual(SettingsView.probeCadence(15), "toutes les 15 s (réseau mobile ou économie d’énergie)")
+        // Sur réseau mobile, la radio n'est plus réveillée toutes les cinq secondes.
+        XCTAssertEqual(AppModel.probeInterval(lowPower: false, lowData: false, metered: true), 15)
+        XCTAssertEqual(AppModel.probeInterval(lowPower: false, lowData: true, metered: true), 30)
         XCTAssertEqual(SettingsView.probeCadence(30), "toutes les 30 s (données réduites)")
     }
 
