@@ -92,6 +92,20 @@ final class TunnelRelayHost: RelayHost {
         (Bundle.main.bundleIdentifier ?? "app.fluxa.ios") + ".relay"
     }
 
+    /// Vrai si la configuration du relais est installée (l'utilisateur l'a autorisée).
+    static func isConfigured() async -> Bool {
+        let managers = (try? await NETunnelProviderManager.loadAllFromPreferences()) ?? []
+        return managers.contains {
+            ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == extensionIdentifier
+        }
+    }
+
+    /// Installe la configuration du relais sans l'ouvrir : iOS demande l'autorisation la
+    /// première fois. Renvoie `true` si elle est installée.
+    static func installConfiguration() async -> Bool {
+        (try? await TunnelRelayHost().loadManager(limits: nil)) != nil
+    }
+
     private func loadManager(limits: RelayLimits?) async throws -> NETunnelProviderManager {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
         let manager = managers.first ?? NETunnelProviderManager()

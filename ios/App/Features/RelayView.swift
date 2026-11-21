@@ -54,6 +54,14 @@ struct RelayView: View {
                         .font(.footnote)
                         .foregroundStyle(Theme.up)
                 }
+                if model.relayIsRunning {
+                    NavigationLink {
+                        PermissionsView()
+                    } label: {
+                        Label("Vérifier les autorisations du relais", systemImage: "hand.raised")
+                            .font(.footnote)
+                    }
+                }
                 if model.relayIsRunning, !model.relayRunsInBackground {
                     Toggle("Garder l’écran allumé", isOn: $model.keepsScreenOnForRelay)
                 }
