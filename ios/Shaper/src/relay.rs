@@ -19,10 +19,23 @@
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
+
+/// Le nombre de connexions relayées en même temps. Chaque connexion occupe deux fils
+/// d'exécution : au-delà, les nouvelles sont refusées, pour que l'extension réseau reste
+/// sous la limite de mémoire qu'iOS lui impose (environ 50 Mo). Un navigateur réessaie.
+pub const MAX_CONNECTIONS: usize = 192;
+
+/// Après la fermeture côté appareil, le temps laissé au serveur pour finir sa réponse
+/// (silence maximal entre deux envois) avant de libérer la connexion.
+const CLOSE_GRACE: Duration = Duration::from_secs(15);
+
+/// La pile de chaque fil de connexion : de quoi lire, résoudre un nom et relayer, sans
+/// réserver les 2 Mo par défaut.
+const CONNECTION_STACK: usize = 256 * 1024;
 
 /// Un plafond dans chaque sens, en octets par seconde. Zéro : sans plafond.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -129,6 +142,11 @@ struct State {
 struct Shared {
     stop: AtomicBool,
     allow_loopback: bool,
+    /// Les connexions en cours, et leur maximum.
+    active: AtomicUsize,
+    max_connections: usize,
+    /// Voir `CLOSE_GRACE` ; plus court dans les tests.
+    close_grace: Mutex<Duration>,
     state: Mutex<State>,
     sockets: Mutex<HashMap<u64, TcpStream>>,
     next_socket: AtomicU64,
@@ -225,6 +243,15 @@ impl Relay {
     /// Ouvre le relais sur ce port (0 : un port libre). `allow_loopback` sert aussi la
     /// boucle locale : pour les tests, et pour le simulateur.
     pub fn start(port: u16, allow_loopback: bool) -> io::Result<Relay> {
+        Self::start_with_capacity(port, allow_loopback, MAX_CONNECTIONS)
+    }
+
+    /// Comme `start`, avec un autre maximum de connexions simultanées.
+    pub fn start_with_capacity(
+        port: u16,
+        allow_loopback: bool,
+        max_connections: usize,
+    ) -> io::Result<Relay> {
         // Une attente bloquante : le fil d'accueil dort jusqu'à la prochaine connexion,
         // au lieu de se réveiller sans cesse. Utile en arrière-plan, dans l'extension.
         let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port))?;
@@ -232,6 +259,9 @@ impl Relay {
         let shared = Arc::new(Shared {
             stop: AtomicBool::new(false),
             allow_loopback,
+            active: AtomicUsize::new(0),
+            max_connections: max_connections.max(1),
+            close_grace: Mutex::new(CLOSE_GRACE),
             state: Mutex::new(State {
                 global: Limit::default(),
                 global_download: Bucket::new(0),
@@ -255,6 +285,11 @@ impl Relay {
 
     pub fn port(&self) -> u16 {
         self.port
+    }
+
+    #[cfg(test)]
+    fn set_close_grace(&self, grace: Duration) {
+        *lock(&self.shared.close_grace) = grace;
     }
 
     /// Le plafond de tout le trafic relayé.
@@ -310,8 +345,10 @@ impl Relay {
             .map(|(address, _)| format!("\"{address}\""))
             .collect();
         format!(
-            "{{\"running\":true,\"port\":{},\"download_limit\":{},\"upload_limit\":{},\"addresses\":[{}],\"clients\":[{}]}}",
+            "{{\"running\":true,\"port\":{},\"active_connections\":{},\"max_connections\":{},\"download_limit\":{},\"upload_limit\":{},\"addresses\":[{}],\"clients\":[{}]}}",
             self.port,
+            self.shared.active.load(Ordering::Relaxed),
+            self.shared.max_connections,
             state.global.download,
             state.global.upload,
             addresses.join(","),
@@ -351,10 +388,22 @@ fn accept_loop(shared: &Arc<Shared>, listener: &TcpListener) {
                 if shared.stop.load(Ordering::Relaxed) || !shared.allows(peer.ip()) {
                     continue;
                 }
+                // Au maximum, la connexion est refermée aussitôt : l'appareil réessaiera.
+                if shared.active.load(Ordering::Relaxed) >= shared.max_connections {
+                    continue;
+                }
+                shared.active.fetch_add(1, Ordering::Relaxed);
                 let serving = Arc::clone(shared);
-                let _ = thread::Builder::new()
+                let spawned = thread::Builder::new()
                     .name("fluxa-relay-connection".into())
-                    .spawn(move || serve(&serving, stream, peer));
+                    .stack_size(CONNECTION_STACK)
+                    .spawn(move || {
+                        serve(&serving, stream, peer);
+                        serving.active.fetch_sub(1, Ordering::Relaxed);
+                    });
+                if spawned.is_err() {
+                    shared.active.fetch_sub(1, Ordering::Relaxed);
+                }
             }
             // Une erreur d'accueil (trop de descripteurs ouverts, écoute coupée par le
             // système) : une courte pause avant de réessayer, sans tourner à vide.
@@ -562,6 +611,26 @@ impl Prefixed {
     }
 }
 
+/// Ce que les deux sens d'un tunnel partagent : la fin du sens descendant, et l'instant
+/// de son dernier envoi, en millisecondes depuis l'ouverture.
+struct Progress {
+    opened: Instant,
+    finished: AtomicBool,
+    last_download_ms: AtomicU64,
+}
+
+impl Progress {
+    fn touch(&self) {
+        self.last_download_ms
+            .store(self.opened.elapsed().as_millis() as u64, Ordering::Relaxed);
+    }
+
+    fn silence(&self) -> Duration {
+        let last = Duration::from_millis(self.last_download_ms.load(Ordering::Relaxed));
+        self.opened.elapsed().saturating_sub(last)
+    }
+}
+
 /// Relaie dans les deux sens, en plafonnant chacun, jusqu'à la fin de l'échange.
 fn tunnel(
     shared: &Arc<Shared>,
@@ -572,12 +641,19 @@ fn tunnel(
     client.set_read_timeout(None)?;
     let _ = upstream.set_nodelay(true);
     let upstream_id = shared.register(&upstream);
+    let progress = Arc::new(Progress {
+        opened: Instant::now(),
+        finished: AtomicBool::new(false),
+        last_download_ms: AtomicU64::new(0),
+    });
 
     let sending = Arc::clone(shared);
+    let watching = Arc::clone(&progress);
     let from_device = client.try_clone()?;
     let to_server = upstream.try_clone()?;
     let uploader = thread::Builder::new()
         .name("fluxa-relay-upload".into())
+        .stack_size(CONNECTION_STACK)
         .spawn(move || {
             let _ = pipe(
                 &sending,
@@ -585,9 +661,21 @@ fn tunnel(
                 from_device,
                 to_server.try_clone(),
                 Direction::Upload,
+                None,
             );
-            // L'appareil a fini d'envoyer : le serveur peut finir sa réponse.
+            // L'appareil a fini d'envoyer : le serveur peut finir sa réponse. Un serveur
+            // muet trop longtemps ne garde pas la connexion, ni sa place, ni ses fils.
             let _ = to_server.shutdown(Shutdown::Write);
+            let grace = *lock(&sending.close_grace);
+            while !watching.finished.load(Ordering::Relaxed)
+                && !sending.stop.load(Ordering::Relaxed)
+            {
+                if watching.silence() >= grace {
+                    let _ = to_server.shutdown(Shutdown::Both);
+                    break;
+                }
+                thread::sleep(grace.min(Duration::from_millis(100)));
+            }
         })?;
 
     let _ = pipe(
@@ -596,7 +684,9 @@ fn tunnel(
         upstream.try_clone()?,
         client.try_clone(),
         Direction::Download,
+        Some(&progress),
     );
+    progress.finished.store(true, Ordering::Relaxed);
     let _ = client.shutdown(Shutdown::Both);
     let _ = upstream.shutdown(Shutdown::Both);
     let _ = uploader.join();
@@ -610,6 +700,7 @@ fn pipe(
     mut from: TcpStream,
     to: io::Result<TcpStream>,
     direction: Direction,
+    progress: Option<&Progress>,
 ) -> io::Result<()> {
     let mut to = to?;
     let mut buffer = [0u8; 8192];
@@ -622,6 +713,9 @@ fn pipe(
         };
         shared.throttle(peer, direction, count);
         to.write_all(&buffer[..count])?;
+        if let Some(progress) = progress {
+            progress.touch();
+        }
     }
     Ok(())
 }
@@ -967,6 +1061,47 @@ mod tests {
             Duration::from_millis(500),
         );
         assert!(refused.is_err(), "le relais écoute encore après son arrêt");
+    }
+
+    #[test]
+    fn connections_beyond_the_maximum_are_refused_until_one_closes() {
+        // Un serveur qui garde ses connexions ouvertes sans rien envoyer.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let target = listener.local_addr().unwrap().port();
+        thread::spawn(move || {
+            let mut held = Vec::new();
+            for stream in listener.incoming().flatten() {
+                held.push(stream);
+            }
+        });
+        let relay = Relay::start_with_capacity(0, true, 2).unwrap();
+        relay.set_close_grace(Duration::from_millis(300));
+        let first = through_connect(&relay, target);
+        let _second = through_connect(&relay, target);
+        assert!(
+            relay.status_json().contains("\"active_connections\":2"),
+            "{}",
+            relay.status_json()
+        );
+
+        // La troisième est refermée sans réponse.
+        let mut third = TcpStream::connect(("127.0.0.1", relay.port())).unwrap();
+        third
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let _ = write!(third, "CONNECT 127.0.0.1:{target} HTTP/1.1\r\n\r\n");
+        let mut answer = Vec::new();
+        let _ = third.read_to_end(&mut answer);
+        assert!(answer.is_empty(), "la connexion de trop a été servie");
+
+        // Une connexion se ferme : la place se libère.
+        drop(first);
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while relay.status_json().contains("\"active_connections\":2") && Instant::now() < deadline
+        {
+            thread::sleep(Duration::from_millis(20));
+        }
+        let _again = through_connect(&relay, target);
     }
 
     #[test]

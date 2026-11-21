@@ -31,6 +31,13 @@ struct RelayView: View {
                     }
                 }
                 .accessibilityIdentifier("etat-relais")
+                if let status, status.running, let active = status.activeConnections, let maximum = status.maxConnections {
+                    LabeledContent("Connexions") {
+                        Text(RelayText.load(active: active, maximum: maximum))
+                            .font(.body.monospacedDigit())
+                            .foregroundStyle(active >= maximum ? Theme.reserved : Theme.text)
+                    }
+                }
                 if let error = model.relayError {
                     Text(error)
                         .font(.footnote)
@@ -246,6 +253,11 @@ enum RelayText {
     static func cleanName(_ name: String) -> String? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : String(trimmed.prefix(40))
+    }
+
+    /// « 12 sur 192 », et la saturation quand le maximum est atteint.
+    static func load(active: Int, maximum: Int) -> String {
+        active >= maximum ? "\(active) sur \(maximum), nouvelles refusées" : "\(active) sur \(maximum)"
     }
 
     static func connections(_ count: Int) -> String {

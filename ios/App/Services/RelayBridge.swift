@@ -56,6 +56,9 @@ struct RelayStatus: Decodable, Equatable {
 
     let running: Bool
     let port: UInt16?
+    /// Les connexions relayées en ce moment, et leur maximum (au-delà, refusées).
+    let activeConnections: Int?
+    let maxConnections: Int?
     let downloadLimit: UInt64?
     let uploadLimit: UInt64?
     let addresses: [String]?
