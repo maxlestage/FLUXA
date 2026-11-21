@@ -486,6 +486,18 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 2, "jamais moins de deux secondes")
     }
 
+    func testVoiceOverSummarisesTheLiveChart() {
+        XCTAssertEqual(LiveChartText.summary([]), "Pas encore de mesure.")
+        let samples = [
+            ThroughputSample(date: Date(timeIntervalSince1970: 0), downloadBps: 50_000_000, uploadBps: 2_000_000),
+            ThroughputSample(date: Date(timeIntervalSince1970: 1), downloadBps: 42_800_000, uploadBps: 8_400_000),
+        ]
+        XCTAssertEqual(
+            LiveChartText.summary(samples),
+            "Maintenant : 42,8\(space)Mb/s descendant, 8,4\(space)Mb/s montant. "
+                + "Sur la minute : jusqu’à 50,0\(space)Mb/s descendant et 8,4\(space)Mb/s montant.")
+    }
+
     func testVoiceOverSummarisesTheHistoryChart() {
         let space = "\u{00A0}"
         func aggregate(_ minute: Double, down: Double, up: Double, peak: Double, samples: Int) -> Aggregate {

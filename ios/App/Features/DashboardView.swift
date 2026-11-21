@@ -143,7 +143,8 @@ private struct LiveChart: View {
                     }
                 }
                 .frame(height: 140)
-                .accessibilityLabel("Débits descendant et montant de la dernière minute, en mégabits par seconde")
+                .accessibilityLabel("Débits descendant et montant de la dernière minute")
+                .accessibilityValue(LiveChartText.summary(samples))
             }
         }
     }
@@ -153,6 +154,18 @@ private struct LiveChart: View {
     static func ceiling(of samples: [ThroughputSample]) -> Double {
         let peak = samples.reduce(0.0) { max($0, $1.downloadBps, $1.uploadBps) }
         return max(1, peak / 1_000_000 * 1.15)
+    }
+}
+
+/// Ce que VoiceOver dit de la courbe en direct : le dernier relevé et le plus fort de
+/// la minute, dans chaque sens.
+enum LiveChartText {
+    static func summary(_ samples: [ThroughputSample]) -> String {
+        guard let last = samples.last else { return "Pas encore de mesure." }
+        let peakDown = samples.map(\.downloadBps).max() ?? 0
+        let peakUp = samples.map(\.uploadBps).max() ?? 0
+        return "Maintenant : \(Format.rate(last.downloadBps)) descendant, \(Format.rate(last.uploadBps)) montant. "
+            + "Sur la minute : jusqu’à \(Format.rate(peakDown)) descendant et \(Format.rate(peakUp)) montant."
     }
 }
 
