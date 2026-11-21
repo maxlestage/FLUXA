@@ -273,6 +273,11 @@ private struct CopyRow: View {
 
 /// Les phrases du relais, séparées de l'écran pour être testées.
 enum RelayText {
+    /// Ce que le relais voit, sous la liste de ce qu'iOS ne fournit pas (Mes appareils).
+    static let devicesNote =
+        "Le relais FLUXA voit les appareils réglés sur lui : leur adresse sur le partage, leur trafic relayé, "
+        + "et il les plafonne. Les autres appareils du partage restent invisibles pour l’app."
+
     /// La durée de la confirmation de copie : deux secondes, ou plus si le réglage
     /// `fluxaCopyConfirmationSeconds` le demande (tests d'interface).
     static func copyConfirmationSeconds(_ defaults: UserDefaults = .standard) -> Double {
