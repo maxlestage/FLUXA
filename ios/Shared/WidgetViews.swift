@@ -25,20 +25,29 @@ enum WidgetText {
     }
 
     static let empty = "Ouvrez FLUXA pour afficher vos mesures."
+
+    /// Le jour du volume affiché : « Aujourd’hui », ou « Le 20 nov. » pour un relevé d'un
+    /// autre jour. Après minuit, le volume de la veille n'est pas présenté comme celui du jour.
+    static func day(of date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        calendar.isDate(date, inSameDayAs: now) ? "Aujourd’hui" : "Le \(Format.day(date))"
+    }
 }
 
 struct FluxaWidgetView: View {
     let snapshot: WidgetSnapshot?
     let layout: WidgetLayout
+    /// L'instant affiché : celui de l'entrée de la chronologie du widget.
+    var now = Date()
 
     var body: some View {
         if let snapshot {
             switch layout {
-            case .small: SmallWidget(snapshot: snapshot)
-            case .medium: MediumWidget(snapshot: snapshot)
+            case .small: SmallWidget(snapshot: snapshot, now: now)
+            case .medium: MediumWidget(snapshot: snapshot, now: now)
             case .circular: CircularWidget(snapshot: snapshot)
-            case .rectangular: RectangularWidget(snapshot: snapshot)
-            case .inline: Text("FLUXA · \(Format.bytes(snapshot.todayBytes)) aujourd’hui")
+            case .rectangular: RectangularWidget(snapshot: snapshot, now: now)
+            case .inline:
+                Text("FLUXA · \(Format.bytes(snapshot.todayBytes)) · \(WidgetText.day(of: snapshot.updatedAt, now: now).lowercased())")
             }
         } else {
             switch layout {
@@ -79,10 +88,11 @@ private struct Brand: View {
 
 private struct TodayBlock: View {
     let snapshot: WidgetSnapshot
+    let now: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("Aujourd’hui")
+            Text(WidgetText.day(of: snapshot.updatedAt, now: now))
                 .font(.caption2)
                 .foregroundStyle(Theme.tertiary)
             Text(Format.bytes(snapshot.todayBytes))
@@ -95,7 +105,7 @@ private struct TodayBlock: View {
                 .foregroundStyle(Theme.down)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            Text(WidgetText.updated(snapshot.updatedAt))
+            Text(WidgetText.updated(snapshot.updatedAt, now: now))
                 .font(.caption2)
                 .foregroundStyle(Theme.tertiary)
                 .lineLimit(1)
@@ -106,12 +116,13 @@ private struct TodayBlock: View {
 
 private struct SmallWidget: View {
     let snapshot: WidgetSnapshot
+    let now: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Brand(isOnline: snapshot.isOnline)
             Spacer(minLength: 0)
-            TodayBlock(snapshot: snapshot)
+            TodayBlock(snapshot: snapshot, now: now)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
@@ -119,13 +130,14 @@ private struct SmallWidget: View {
 
 private struct MediumWidget: View {
     let snapshot: WidgetSnapshot
+    let now: Date
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Brand(isOnline: nil)
                 Spacer(minLength: 0)
-                TodayBlock(snapshot: snapshot)
+                TodayBlock(snapshot: snapshot, now: now)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             VStack(alignment: .leading, spacing: 6) {
@@ -192,10 +204,11 @@ private struct CircularWidget: View {
 
 private struct RectangularWidget: View {
     let snapshot: WidgetSnapshot
+    let now: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text("FLUXA · aujourd’hui")
+            Text("FLUXA · \(WidgetText.day(of: snapshot.updatedAt, now: now).lowercased())")
                 .font(.caption2.weight(.semibold))
             Text(Format.bytes(snapshot.todayBytes))
                 .font(.headline.monospacedDigit())
@@ -203,7 +216,7 @@ private struct RectangularWidget: View {
                 Text(WidgetText.planRemaining(plan))
                     .font(.caption2)
             } else {
-                Text(WidgetText.updated(snapshot.updatedAt))
+                Text(WidgetText.updated(snapshot.updatedAt, now: now))
                     .font(.caption2)
             }
         }
