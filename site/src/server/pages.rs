@@ -252,7 +252,7 @@ struct Feature {
     meta: &'static str,
 }
 
-const FEATURES: [Feature; 14] = [
+const FEATURES: [Feature; 15] = [
     Feature {
         id: "f-tableau",
         name: "Tableau de bord",
@@ -308,6 +308,13 @@ const FEATURES: [Feature; 14] = [
         status: OK,
         text: "Des widgets d’écran d’accueil et d’écran verrouillé avec le volume du jour, le débit et le forfait, et le relais ouvert dans la Dynamic Island. Ils affichent le dernier relevé de l’app, avec son heure.",
         meta: "Un widget ne mesure pas lui-même",
+    },
+    Feature {
+        id: "f-siri",
+        name: "Siri et Raccourcis",
+        status: OK,
+        text: "Demandez à Siri le volume du jour ou le forfait restant, ou ouvrez le relais, depuis l’app Raccourcis. Les réponses viennent du dernier relevé de l’app, avec son heure.",
+        meta: "« Volume du jour dans FLUXA »",
     },
     Feature {
         id: "f-appareils",
@@ -904,6 +911,7 @@ const FOOTER: [(&str, &[(&str, &str)]); 6] = [
             ("#f-forfait", "Forfait mobile"),
             ("#f-relais", "Relais de partage"),
             ("#f-widgets", "Widgets et Dynamic Island"),
+            ("#f-siri", "Siri et Raccourcis"),
             ("#f-partage", "Partage de connexion"),
             ("#f-historique", "Historique"),
             ("#f-automatisations", "Automatisations"),
