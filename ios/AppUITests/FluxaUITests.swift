@@ -501,6 +501,15 @@ final class FluxaUITests: XCTestCase {
         turnOn(toggle)
         XCTAssertTrue(element(containing: "En service").waitForExistence(timeout: 10))
         XCTAssertTrue(element(containing: "proxy.pac").exists)
+        // Copier l'adresse de configuration le confirme sur la ligne.
+        let pac = app.buttons["copier-pac"]
+        XCTAssertTrue(scroll(to: pac))
+        pac.tap()
+        func pacRow(saying text: String) -> XCUIElement {
+            app.buttons.matching(NSPredicate(format: "identifier == 'copier-pac' AND label CONTAINS %@", text)).firstMatch
+        }
+        XCTAssertTrue(pacRow(saying: "Copié.").waitForExistence(timeout: 2))
+        XCTAssertTrue(pacRow(saying: "Toucher pour copier").waitForExistence(timeout: 5), "la confirmation s'efface")
 
         // Un appareil relié : le lanceur de tests, qui passe par le relais (boucle locale).
         let configuration = URLSessionConfiguration.ephemeral
