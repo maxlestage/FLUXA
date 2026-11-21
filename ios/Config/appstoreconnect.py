@@ -6,8 +6,7 @@
   pas encore, et en tire l'identifiant de l'équipe (le préfixe seedId) si TEAM_ID manque.
 - Enregistre l'identifiant de l'extension du relais (BUNDLE_ID.relay) et active les
   extensions réseau sur les deux identifiants ; enregistre celui des widgets
-  (BUNDLE_ID.widgets) et active les groupes d'apps sur l'app et les widgets. Le groupe
-  lui-même (group.BUNDLE_ID) est enregistré par la signature automatique de Xcode.
+  (BUNDLE_ID.widgets).
 - Vérifie que l'app existe dans App Store Connect : une app ne peut pas y être créée par
   l'API, il faut le faire une fois à la main.
 
@@ -147,10 +146,9 @@ def main() -> None:
     relay = bundle_record(f"{bundle_id}.relay", bearer, name="FLUXA Relais")
     for item in (record, relay):
         enable_network_extensions(item, bearer)
-    # Les widgets ont aussi leur identifiant ; l'app et eux partagent un groupe d'apps.
-    widgets = bundle_record(f"{bundle_id}.widgets", bearer, name="FLUXA Widgets")
-    for item in (record, widgets):
-        enable(item, "APP_GROUPS", bearer)
+    # Les widgets ont aussi leur identifiant. Ils partagent avec l'app un trousseau, autorisé
+    # d'office pour l'équipe : aucune capacité à activer.
+    bundle_record(f"{bundle_id}.widgets", bearer, name="FLUXA Widgets")
     with open(os.environ["GITHUB_ENV"], "a") as env:
         env.write(f"BUNDLE_ID={bundle_id}\nTEAM_ID={team_id}\n")
     # L'identifiant de l'équipe est masqué dans le journal public.
