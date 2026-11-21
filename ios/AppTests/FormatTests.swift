@@ -521,6 +521,11 @@ final class FormatTests: XCTestCase {
         XCTAssertTrue(anonymous.hasPrefix("172.20.10.3. débit vers l’appareil —"), anonymous)
     }
 
+    func testTheRelayIsPolledOftenOnlyWhenWatched() {
+        XCTAssertEqual(AppModel.relayPollInterval(screenVisible: true), 1)
+        XCTAssertEqual(AppModel.relayPollInterval(screenVisible: false), 5)
+    }
+
     func testAStoppedRelayIsReopenedWithoutHammering() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         XCTAssertTrue(AppModel.shouldReopenRelay(lastAttempt: nil, now: now))
