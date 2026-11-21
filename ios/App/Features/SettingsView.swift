@@ -130,8 +130,20 @@ struct SettingsView: View {
                 }
 
                 Section("À propos") {
-                    ValueRow("Version", appVersion)
+                    ValueRow("Version", AppInfo.version)
+                    ValueRow("Build", AppInfo.build)
+                        .accessibilityIdentifier("numero-build")
                     ValueRow("Moteur", FluxaEngine.version)
+                    NavigationLink {
+                        CreditsView()
+                    } label: {
+                        LabeledContent("Crédits") {
+                            Text(AppInfo.author)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                    }
+                    .accessibilityIdentifier("reglage-credits")
                 }
             }
             .fluxaBackground()
@@ -149,7 +161,4 @@ struct SettingsView: View {
         }
     }
 
-    private var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? Format.missing
-    }
 }

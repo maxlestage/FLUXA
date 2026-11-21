@@ -347,6 +347,36 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(MeasureTilesLayout.columnCount(for: .accessibility5), 1)
     }
 
+    // MARK: Crédits, Siri et Raccourcis
+
+    func testTheAboutScreenNamesTheAuthorAndTheBuild() {
+        XCTAssertEqual(AppInfo.author, "Maxime Nathan Lestage")
+        XCTAssertEqual(AppInfo.line(version: "1.0", build: "12"), "Version 1.0 (build 12)")
+        XCTAssertFalse(AppInfo.build.isEmpty)
+    }
+
+    func testSiriAnswersFromTheLastReading() {
+        var calendar = Calendar.current
+        calendar.timeZone = .current
+        let now = Date()
+        var snapshot = WidgetSnapshot.example
+        snapshot.updatedAt = now
+        let today = IntentText.today(snapshot, now: now)
+        XCTAssertTrue(today.hasPrefix("Aujourd’hui : 1,24\(space)Go reçus et envoyés."), today)
+        XCTAssertTrue(today.contains("Relevé à"), "l'heure du relevé est dite")
+        XCTAssertEqual(IntentText.plan(snapshot, now: now).hasPrefix("Il reste 37,60\(space)Go sur 50\(space)Go."), true)
+        snapshot.plan = nil
+        XCTAssertEqual(IntentText.plan(snapshot, now: now), "Aucun forfait n’est réglé dans FLUXA.")
+        XCTAssertTrue(IntentText.today(nil).hasPrefix("Ouvrez FLUXA"))
+    }
+
+    func testAShortcutRequestIsTakenOnce() {
+        let router = IntentRouter.shared
+        router.request(.openRelay)
+        XCTAssertEqual(router.take(), .openRelay)
+        XCTAssertNil(router.take())
+    }
+
     // MARK: Autorisations
 
     func testEachPermissionSaysWhyAndWhatToDo() {

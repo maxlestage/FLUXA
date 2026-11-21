@@ -38,6 +38,9 @@ struct FluxaApp: App {
 /// Les cinq onglets de l'app.
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    /// Le relais ouvert par Siri ou un raccourci.
+    @State private var showsRelay = false
+    private let intents = IntentRouter.shared
     @State private var tab = Launch.tab
     /// L'accueil ne s'affiche qu'au premier lancement.
     @State private var showsWelcome = !UserDefaults.standard.bool(forKey: Launch.welcomeKey)
@@ -45,6 +48,24 @@ struct RootView: View {
     var body: some View {
         @Bindable var model = model
         content
+            .sheet(isPresented: $showsRelay) {
+                NavigationStack {
+                    RelayView()
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("OK") { showsRelay = false }
+                            }
+                        }
+                }
+            }
+            // Une demande de Siri ou d'un raccourci : ouvrir le relais et l'écran du relais.
+            .onChange(of: intents.pending, initial: true) { _, request in
+                guard request != nil, intents.take() == .openRelay else { return }
+                if !model.relayEnabled {
+                    model.setRelay(true)
+                }
+                showsRelay = true
+            }
             .fullScreenCover(isPresented: $showsWelcome) {
                 WelcomeView {
                     UserDefaults.standard.set(true, forKey: Launch.welcomeKey)
