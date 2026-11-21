@@ -343,6 +343,22 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(MeasureTilesLayout.columnCount(for: .accessibility5), 1)
     }
 
+    func testVoiceOverReadsARelayedDeviceInOneSentence() {
+        let client = RelayStatus.Client(
+            address: "172.20.10.3", connections: 2, toDeviceBytes: 120_000_000, fromDeviceBytes: 8_000_000,
+            idleSeconds: 0, downloadLimit: 0, uploadLimit: 0)
+        let rate = RelayRate(toDeviceBps: 3_200_000, fromDeviceBps: 400_000)
+        let named = RelayText.spoken(name: "MacBook de Léa", client: client, rate: rate)
+        XCTAssertEqual(
+            named,
+            "MacBook de Léa. 172.20.10.3. débit vers l’appareil 3,2\(space)Mb/s, depuis l’appareil 0,4\(space)Mb/s. relayé : 120,0\(space)Mo vers l’appareil, 8,0\(space)Mo depuis l’appareil. 2 connexions"
+        )
+        XCTAssertFalse(named.contains("↓") || named.contains("↑"), "les flèches ne se lisent pas")
+        // Sans nom, l'adresse n'est pas répétée ; sans débit mesuré, un tiret, jamais un zéro.
+        let anonymous = RelayText.spoken(name: nil, client: client, rate: nil)
+        XCTAssertTrue(anonymous.hasPrefix("172.20.10.3. débit vers l’appareil —"), anonymous)
+    }
+
     func testAStoppedRelayIsReopenedWithoutHammering() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         XCTAssertTrue(AppModel.shouldReopenRelay(lastAttempt: nil, now: now))
