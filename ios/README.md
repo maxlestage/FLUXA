@@ -137,6 +137,12 @@ ancienneté, et le système les grise après cinq minutes. Quand iOS réveille l
 (rafraîchissement en arrière-plan, au mieux tous les quarts d'heure, sans garantie), FLUXA demande
 à l'extension du relais son état réel et met l'activité à jour.
 
+## Siri et Raccourcis
+
+Trois intentions (`App/Intents/`) : « Volume du jour dans FLUXA », « Forfait restant dans FLUXA »
+et « Ouvre le relais FLUXA ». Les deux premières répondent depuis le dernier relevé de l'app, avec
+son heure, sans ouvrir l'app ; la troisième ouvre l'app sur le relais et l'ouvre.
+
 ## Ce que l'app compte quand elle est fermée
 
 Les compteurs d'octets du système sont cumulés depuis le démarrage de l'iPhone. Au retour dans
