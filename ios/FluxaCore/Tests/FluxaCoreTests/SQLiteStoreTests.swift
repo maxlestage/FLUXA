@@ -85,6 +85,7 @@ final class SQLiteStoreTests: XCTestCase {
         let database = try SQLiteDatabase(path: url.path)
         XCTAssertEqual(try database.integer("PRAGMA user_version"), Int64(SQLiteStore.schemaVersion))
         XCTAssertEqual(try database.rows("PRAGMA journal_mode") { $0.text(0) }, ["wal"])
+        XCTAssertEqual(store.synchronousMode, 1, "pas de synchronisation du disque à chaque sauvegarde")
         let tables = try database.rows("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name") {
             $0.text(0)
         }
