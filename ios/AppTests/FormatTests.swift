@@ -336,6 +336,13 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayBridge.status()?.running, false)
     }
 
+    func testMeasuresTakeOneColumnAtAccessibilitySizes() {
+        XCTAssertEqual(MeasureTilesLayout.columnCount(for: .large), 2)
+        XCTAssertEqual(MeasureTilesLayout.columnCount(for: .xxxLarge), 2)
+        XCTAssertEqual(MeasureTilesLayout.columnCount(for: .accessibility1), 1)
+        XCTAssertEqual(MeasureTilesLayout.columnCount(for: .accessibility5), 1)
+    }
+
     func testTheRelayFollowsTheDisplayedCap() {
         var sent = RelayLimits(download: 5_000_000, upload: 1_000_000)
         sent.devices["172.20.10.3"] = (800_000, nil)

@@ -152,6 +152,8 @@ private struct Reading: View {
     let label: String
     let value: String
     let color: Color
+    /// Le résultat suit la taille de texte choisie dans les réglages d'iOS.
+    @ScaledMetric(relativeTo: .title) private var size: CGFloat = 40
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -159,7 +161,7 @@ private struct Reading: View {
                 .font(.subheadline)
                 .foregroundStyle(Theme.secondary)
             Text(value)
-                .font(.system(size: 40, weight: .bold, design: .monospaced))
+                .font(.system(size: size, weight: .bold, design: .monospaced))
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .foregroundStyle(color)

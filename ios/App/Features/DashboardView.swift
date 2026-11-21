@@ -68,6 +68,8 @@ private struct StatusLine: View {
 
 private struct ThroughputHeader: View {
     @Environment(AppModel.self) private var model
+    /// Le grand débit suit la taille de texte choisie dans les réglages d'iOS.
+    @ScaledMetric(relativeTo: .largeTitle) private var headline: CGFloat = 64
 
     var body: some View {
         let down = Format.rateParts(model.snapshot.downloadBps)
@@ -75,7 +77,7 @@ private struct ThroughputHeader: View {
             Eyebrow("Débit descendant")
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(down.value)
-                    .font(.system(size: 64, weight: .bold, design: .monospaced))
+                    .font(.system(size: headline, weight: .bold, design: .monospaced))
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
                     .foregroundStyle(Theme.down)
@@ -154,10 +156,23 @@ private struct LiveChart: View {
     }
 }
 
+/// La disposition des mesures du tableau de bord, séparée de la vue pour être testée.
+enum MeasureTilesLayout {
+    static func columnCount(for size: DynamicTypeSize) -> Int {
+        size.isAccessibilitySize ? 1 : 2
+    }
+}
+
 private struct MeasureTiles: View {
     @Environment(AppModel.self) private var model
 
-    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// Deux colonnes, ou une seule aux tailles de texte d'accessibilité : les mesures
+    /// restent lisibles en entier.
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 12), count: MeasureTilesLayout.columnCount(for: typeSize))
+    }
 
     var body: some View {
         let snapshot = model.snapshot
