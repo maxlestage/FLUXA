@@ -477,6 +477,15 @@ final class FormatTests: XCTestCase {
         XCTAssertTrue(RelayActivityController.shouldUpdate(force: false, devicesChanged: false, lastUpdate: now.addingTimeInterval(-10), now: now))
     }
 
+    func testACopyRowSaysWhetherItWasCopied() {
+        XCTAssertEqual(
+            RelayText.copyLabel("Mandataire", value: "172.20.10.1:8888", copied: false),
+            "Mandataire : 172.20.10.1:8888. Toucher pour copier.")
+        XCTAssertEqual(
+            RelayText.copyLabel("Mandataire", value: "172.20.10.1:8888", copied: true),
+            "Mandataire : 172.20.10.1:8888. Copié.")
+    }
+
     func testTheDashboardSummarisesTheRelay() {
         func client(_ address: String, connections: Int) -> RelayStatus.Client {
             RelayStatus.Client(
