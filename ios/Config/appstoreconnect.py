@@ -5,7 +5,9 @@
 - Enregistre l'identifiant de l'app (BUNDLE_ID) sur le compte développeur s'il ne l'est
   pas encore, et en tire l'identifiant de l'équipe (le préfixe seedId) si TEAM_ID manque.
 - Enregistre l'identifiant de l'extension du relais (BUNDLE_ID.relay) et active les
-  extensions réseau sur les deux identifiants.
+  extensions réseau sur les deux identifiants ; enregistre celui des widgets
+  (BUNDLE_ID.widgets) et active les groupes d'apps sur l'app et les widgets. Le groupe
+  lui-même (group.BUNDLE_ID) est enregistré par la signature automatique de Xcode.
 - Vérifie que l'app existe dans App Store Connect : une app ne peut pas y être créée par
   l'API, il faut le faire une fois à la main.
 
@@ -101,15 +103,20 @@ def bundle_record(bundle_id: str, bearer: str, name: str = "FLUXA") -> dict:
 
 
 def enable_network_extensions(record: dict, bearer: str) -> None:
-    """Active les extensions réseau sur l'identifiant (le relais en arrière-plan). Une
-    capacité déjà active fait répondre 409 : rien à faire."""
+    """Active les extensions réseau sur l'identifiant (le relais en arrière-plan)."""
+    enable(record, "NETWORK_EXTENSIONS", bearer)
+
+
+def enable(record: dict, capability: str, bearer: str) -> None:
+    """Active une capacité sur l'identifiant. Une capacité déjà active fait répondre 409 :
+    rien à faire."""
     call(
         "/v1/bundleIdCapabilities",
         bearer,
         {
             "data": {
                 "type": "bundleIdCapabilities",
-                "attributes": {"capabilityType": "NETWORK_EXTENSIONS"},
+                "attributes": {"capabilityType": capability},
                 "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": record["id"]}}},
             }
         },
@@ -140,6 +147,10 @@ def main() -> None:
     relay = bundle_record(f"{bundle_id}.relay", bearer, name="FLUXA Relais")
     for item in (record, relay):
         enable_network_extensions(item, bearer)
+    # Les widgets ont aussi leur identifiant ; l'app et eux partagent un groupe d'apps.
+    widgets = bundle_record(f"{bundle_id}.widgets", bearer, name="FLUXA Widgets")
+    for item in (record, widgets):
+        enable(item, "APP_GROUPS", bearer)
     with open(os.environ["GITHUB_ENV"], "a") as env:
         env.write(f"BUNDLE_ID={bundle_id}\nTEAM_ID={team_id}\n")
     # L'identifiant de l'équipe est masqué dans le journal public.

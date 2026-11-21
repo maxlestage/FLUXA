@@ -29,8 +29,8 @@ async fn serves_the_home_page() {
         );
     }
     assert!(html.contains("42,8"));
-    // Treize fonctions, chacune avec son ancre, et un pied de page complet.
-    assert_eq!(html.matches(r#"class="feat""#).count(), 13);
+    // Quatorze fonctions, chacune avec son ancre, et un pied de page complet.
+    assert_eq!(html.matches(r#"class="feat""#).count(), 14);
     assert_eq!(html.matches(r#"class="fcol""#).count(), 6);
     // iOS seulement.
     assert!(!html.to_lowercase().contains("android"));
@@ -228,5 +228,7 @@ async fn the_site_does_not_lie() {
     assert!(home.contains("id=\"f-relais\""));
     assert!(home.contains("Partiel"));
     assert!(home.contains("bêta privée"));
-    assert!(home.contains("Pas encore sur l’App Store") || home.contains("pas encore sur l’App Store"));
+    assert!(
+        home.contains("Pas encore sur l’App Store") || home.contains("pas encore sur l’App Store")
+    );
 }

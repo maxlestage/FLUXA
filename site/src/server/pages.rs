@@ -252,7 +252,7 @@ struct Feature {
     meta: &'static str,
 }
 
-const FEATURES: [Feature; 13] = [
+const FEATURES: [Feature; 14] = [
     Feature {
         id: "f-tableau",
         name: "Tableau de bord",
@@ -301,6 +301,13 @@ const FEATURES: [Feature; 13] = [
         status: PARTIAL,
         text: "Les appareils reliés qui règlent leur proxy sur FLUXA passent par son relais : leur trafic est réellement plafonné, globalement ou appareil par appareil, et compté pour chacun. Une extension réseau le garde en service en arrière-plan.",
         meta: "Seul le trafic relayé est plafonné",
+    },
+    Feature {
+        id: "f-widgets",
+        name: "Widgets et Dynamic Island",
+        status: OK,
+        text: "Des widgets d’écran d’accueil et d’écran verrouillé avec le volume du jour, le débit et le forfait, et le relais ouvert dans la Dynamic Island. Ils affichent le dernier relevé de l’app, avec son heure.",
+        meta: "Un widget ne mesure pas lui-même",
     },
     Feature {
         id: "f-appareils",
@@ -896,6 +903,7 @@ const FOOTER: [(&str, &[(&str, &str)]); 6] = [
             ("#f-reseau", "Mon réseau"),
             ("#f-forfait", "Forfait mobile"),
             ("#f-relais", "Relais de partage"),
+            ("#f-widgets", "Widgets et Dynamic Island"),
             ("#f-partage", "Partage de connexion"),
             ("#f-historique", "Historique"),
             ("#f-automatisations", "Automatisations"),

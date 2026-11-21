@@ -343,6 +343,54 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(MeasureTilesLayout.columnCount(for: .accessibility5), 1)
     }
 
+    // MARK: Widgets et activité en direct
+
+    func testTheWidgetSnapshotGoesThroughTheSharedStore() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "fluxa-tests-\(UUID().uuidString)"))
+        XCTAssertNil(WidgetSnapshot.load(from: defaults), "sans relevé, rien")
+        var snapshot = WidgetSnapshot.example
+        snapshot.relay = WidgetSnapshot.Relay(devices: 2, toDevicesBps: 3_200_000, cap: "↓ 5 Mb/s · ↑ Sans plafond")
+        XCTAssertTrue(snapshot.save(to: defaults))
+        XCTAssertEqual(WidgetSnapshot.load(from: defaults), snapshot)
+        // Un relevé illisible ne fait pas planter le widget.
+        defaults.set(Data("abîmé".utf8), forKey: WidgetSnapshot.key)
+        XCTAssertNil(WidgetSnapshot.load(from: defaults))
+    }
+
+    func testWidgetsSayWhenTheReadingWasTaken() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Paris")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 21, hour: 15, minute: 0))!
+        let earlier = calendar.date(from: DateComponents(year: 2026, month: 11, day: 21, hour: 14, minute: 32))!
+        let yesterday = calendar.date(from: DateComponents(year: 2026, month: 11, day: 20, hour: 22, minute: 5))!
+        XCTAssertTrue(WidgetText.updated(earlier, now: now, calendar: calendar).hasPrefix("Relevé à "))
+        XCTAssertTrue(WidgetText.updated(yesterday, now: now, calendar: calendar).hasPrefix("Relevé le "))
+        let plan = WidgetSnapshot.Plan(
+            usedBytes: 12_400_000_000, allowanceBytes: 50_000_000_000, remainingBytes: 37_600_000_000,
+            fractionUsed: 0.248, cycleEnd: now)
+        XCTAssertEqual(WidgetText.planRemaining(plan), "Reste 37,60\(space)Go")
+        var over = plan
+        over.usedBytes = 51_000_000_000
+        XCTAssertEqual(WidgetText.planRemaining(over), "Forfait dépassé")
+        XCTAssertEqual(WidgetText.percent(0.248), "25\(space)%")
+        XCTAssertEqual(RelayActivityText.devices(0), "Aucun appareil")
+        XCTAssertEqual(RelayActivityText.devices(1), "1 appareil")
+        XCTAssertEqual(RelayActivityText.devices(3), "3 appareils")
+        XCTAssertEqual(RelayActivityText.rate(nil), "—", "un débit non mesuré reste un tiret")
+    }
+
+    func testWidgetsAndTheActivityAreRefreshedSparingly() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        XCTAssertTrue(WidgetPublisher.shouldReload(force: false, shapeChanged: false, lastReload: nil, now: now))
+        XCTAssertFalse(WidgetPublisher.shouldReload(force: false, shapeChanged: false, lastReload: now.addingTimeInterval(-60), now: now))
+        XCTAssertTrue(WidgetPublisher.shouldReload(force: false, shapeChanged: true, lastReload: now.addingTimeInterval(-60), now: now))
+        XCTAssertTrue(WidgetPublisher.shouldReload(force: true, shapeChanged: false, lastReload: now.addingTimeInterval(-60), now: now))
+        XCTAssertTrue(WidgetPublisher.shouldReload(force: false, shapeChanged: false, lastReload: now.addingTimeInterval(-900), now: now))
+        XCTAssertFalse(RelayActivityController.shouldUpdate(force: false, devicesChanged: false, lastUpdate: now.addingTimeInterval(-3), now: now))
+        XCTAssertTrue(RelayActivityController.shouldUpdate(force: false, devicesChanged: true, lastUpdate: now.addingTimeInterval(-3), now: now))
+        XCTAssertTrue(RelayActivityController.shouldUpdate(force: false, devicesChanged: false, lastUpdate: now.addingTimeInterval(-10), now: now))
+    }
+
     func testTheDashboardSummarisesTheRelay() {
         func client(_ address: String, connections: Int) -> RelayStatus.Client {
             RelayStatus.Client(

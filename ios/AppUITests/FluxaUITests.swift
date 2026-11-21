@@ -416,6 +416,27 @@ final class FluxaUITests: XCTestCase {
         assertNoError()
     }
 
+    // MARK: Widgets et Dynamic Island
+
+    func testTheWidgetsAndTheIslandCanBePreviewed() {
+        launch(["-fluxaScreen", "widgets"])
+        XCTAssertTrue(app.navigationBars["Widgets et Dynamic Island"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.descendants(matching: .any)["apercu-widgets"].waitForExistence(timeout: 10))
+        XCTAssertTrue(element(containing: "Aujourd’hui").exists)
+        XCTAssertTrue(scroll(to: app.descendants(matching: .any)["apercu-ile"]))
+        XCTAssertTrue(element(containing: "Relais de partage").exists)
+        assertNoError()
+    }
+
+    func testTheWidgetsAreReachableFromSettings() {
+        launch(["-fluxaTab", "reglages"])
+        XCTAssertTrue(app.navigationBars["Réglages"].waitForExistence(timeout: 30))
+        let link = app.descendants(matching: .any)["reglage-widgets"]
+        XCTAssertTrue(scroll(to: link))
+        link.tap()
+        XCTAssertTrue(app.navigationBars["Widgets et Dynamic Island"].waitForExistence(timeout: 10))
+    }
+
     // MARK: Relais de partage
 
     func testTheRelayCarriesAndCountsADevicesTraffic() {
