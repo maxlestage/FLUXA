@@ -82,10 +82,17 @@ public final class SQLiteStore: EngineStore {
         // Le journal en écriture anticipée : une écriture interrompue ne laisse pas la
         // base à moitié écrite, et les lectures ne bloquent pas.
         _ = try database.rows("PRAGMA journal_mode=WAL") { $0.text(0) }
+        // Avec ce journal, NORMAL ne synchronise le disque qu'aux points de contrôle et
+        // non à chaque sauvegarde (une par minute) : la base reste intacte, une coupure
+        // d'alimentation peut seulement perdre la dernière sauvegarde.
+        try database.execute("PRAGMA synchronous=NORMAL")
         try Self.migrate(database, from: version)
         self.database = database
         protectFiles()
     }
+
+    /// Le mode de synchronisation de la connexion (1 = NORMAL), pour les tests.
+    var synchronousMode: Int64 { (try? database.integer("PRAGMA synchronous")) ?? -1 }
 
     // MARK: EngineStore
 
