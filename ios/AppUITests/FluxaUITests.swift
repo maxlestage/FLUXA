@@ -448,7 +448,7 @@ final class FluxaUITests: XCTestCase {
         let device = app.descendants(matching: .any)["appareil-relaye"].firstMatch
         XCTAssertTrue(scroll(to: device))
         XCTAssertTrue(element(containing: "127.0.0.1").exists)
-        XCTAssertFalse(element(containing: "Relayé : ↓ 0").exists)
+        XCTAssertFalse(element(containing: "relayé : 0\u{00A0}o vers").exists)
         assertNoError()
     }
 

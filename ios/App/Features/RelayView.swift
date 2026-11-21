@@ -155,10 +155,14 @@ private struct RelayClientRow: View {
                             .foregroundStyle(Theme.tertiary)
                     }
                 }
+                // VoiceOver lit l'appareil en une phrase, sans les flèches.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(RelayText.spoken(name: name, client: client, rate: rate))
                 Spacer()
                 Text(RelayText.connections(client.connections))
                     .font(.caption)
                     .foregroundStyle(Theme.tertiary)
+                    .accessibilityHidden(true)
                 Button {
                     draft = name ?? ""
                     renaming = true
@@ -171,7 +175,9 @@ private struct RelayClientRow: View {
             Text("↓ \(Format.rate(rate?.toDeviceBps)) · ↑ \(Format.rate(rate?.fromDeviceBps))")
                 .font(.subheadline.monospacedDigit())
                 .foregroundStyle(Theme.text)
+                .accessibilityHidden(true)
             Text("Relayé : ↓ \(Format.bytes(client.toDeviceBytes)) · ↑ \(Format.bytes(client.fromDeviceBytes))")
+                .accessibilityHidden(true)
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(Theme.secondary)
             Picker("Plafond de l’appareil", selection: Binding(get: { profileID }, set: choose)) {
@@ -253,6 +259,20 @@ enum RelayText {
     static func cleanName(_ name: String) -> String? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : String(trimmed.prefix(40))
+    }
+
+    /// La phrase que lit VoiceOver pour un appareil relayé.
+    static func spoken(name: String?, client: RelayStatus.Client, rate: RelayRate?) -> String {
+        var parts = [displayName(name, address: client.address)]
+        if cleanName(name ?? "") != nil {
+            parts.append(client.address)
+        }
+        parts.append(
+            "débit vers l’appareil \(Format.rate(rate?.toDeviceBps)), depuis l’appareil \(Format.rate(rate?.fromDeviceBps))")
+        parts.append(
+            "relayé : \(Format.bytes(client.toDeviceBytes)) vers l’appareil, \(Format.bytes(client.fromDeviceBytes)) depuis l’appareil")
+        parts.append(connections(client.connections))
+        return parts.joined(separator: ". ")
     }
 
     /// « 12 sur 192 », et la saturation quand le maximum est atteint.
