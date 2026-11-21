@@ -1,3 +1,4 @@
+import BackgroundTasks
 import FluxaCore
 import Foundation
 import Observation
@@ -218,6 +219,7 @@ final class AppModel {
         // Avant la suspension : le dernier relevé pour les widgets et l'activité en direct.
         widgets.publish(widgetSnapshot(), force: true)
         updateRelayActivity(force: true)
+        scheduleRelayRefresh()
         // iOS suspend l'app en arrière-plan : un relais dans l'app se ferme et se rouvre au
         // retour ; celui de l'extension réseau continue.
         if !relayHost.keepsRunningInBackground {
@@ -652,6 +654,58 @@ final class AppModel {
             devices: active.count,
             toDevicesBps: measured.isEmpty ? nil : measured.reduce(0, +),
             cap: RelayText.cap(lastApply?.requested ?? activeProfile?.policy),
+            updatedAt: now
+        )
+    }
+
+    // MARK: Rafraîchissement en arrière-plan
+
+    /// La tâche qu'iOS lance de temps en temps quand l'app est suspendue (au mieux toutes
+    /// les quinze minutes, sans garantie).
+    static var relayRefreshIdentifier: String {
+        (Bundle.main.bundleIdentifier ?? "app.fluxa.ios") + ".relay-refresh"
+    }
+
+    /// Demande un réveil si le relais tourne en arrière-plan avec son activité en direct.
+    private func scheduleRelayRefresh() {
+        guard relayRunsInBackground, showsRelayActivity else { return }
+        let request = BGAppRefreshTaskRequest(identifier: Self.relayRefreshIdentifier)
+        request.earliestBeginDate = Date().addingTimeInterval(15 * 60)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    /// App réveillée en arrière-plan : l'état réel du relais est demandé à l'extension, deux
+    /// fois à une seconde d'écart pour en tirer le débit, et l'activité est mise à jour.
+    func refreshRelayInBackground() async {
+        guard relayEnabled, showsRelayActivity, relayHost.keepsRunningInBackground,
+              await relayHost.isRunning(),
+              let first = await relayHost.status(), first.running
+        else { return }
+        try? await Task.sleep(for: .seconds(1))
+        guard let second = await relayHost.status(), second.running else { return }
+        let state = Self.relayActivityState(
+            first: first, second: second, seconds: 1,
+            cap: RelayText.cap(lastApply?.requested ?? activeProfile?.policy), now: Date())
+        if relayActivity.isRunning {
+            relayActivity.update(state, force: true)
+        } else {
+            relayActivity.start(state, since: relayOpenedAt ?? Date())
+        }
+        scheduleRelayRefresh()
+    }
+
+    /// L'état de l'activité à partir de deux relevés du relais : appareils actifs et débit
+    /// vers eux entre les deux. Sans écart mesurable, pas de débit inventé.
+    static func relayActivityState(
+        first: RelayStatus, second: RelayStatus, seconds: Double, cap: String, now: Date
+    ) -> RelayActivityAttributes.ContentState {
+        let before = Dictionary(uniqueKeysWithValues: (first.clients ?? []).map { ($0.address, $0) })
+        let active = (second.clients ?? []).filter { $0.connections > 0 }
+        let rates = active.compactMap { RelayRate.between(before[$0.address], $0, seconds: seconds).toDeviceBps }
+        return RelayActivityAttributes.ContentState(
+            devices: active.count,
+            toDevicesBps: rates.isEmpty ? nil : rates.reduce(0, +),
+            cap: cap,
             updatedAt: now
         )
     }

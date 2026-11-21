@@ -49,7 +49,7 @@ struct WidgetsView: View {
             } header: {
                 Text("Activité en direct du relais")
             } footer: {
-                Text("Quand le relais de partage est ouvert, il apparaît sur l’écran verrouillé et dans la Dynamic Island, avec le temps écoulé depuis son ouverture. Une app en arrière-plan ne peut pas mettre à jour son activité : le nombre d’appareils et le débit sont ceux du dernier relevé de FLUXA, et l’activité indique leur ancienneté.")
+                Text("Quand le relais de partage est ouvert, il apparaît sur l’écran verrouillé et dans la Dynamic Island, avec le temps écoulé depuis son ouverture. En arrière-plan, FLUXA ne peut la mettre à jour que lorsqu’iOS le réveille, au mieux tous les quarts d’heure et sans garantie : le nombre d’appareils et le débit sont ceux du dernier relevé, et l’activité indique leur ancienneté.")
             }
         }
         .fluxaBackground()

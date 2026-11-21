@@ -63,8 +63,13 @@ targets:
         UIUserInterfaceStyle: Dark
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        # L'activité en direct du relais (écran verrouillé, Dynamic Island).
+        # L'activité en direct du relais (écran verrouillé, Dynamic Island), rafraîchie quand
+        # iOS réveille l'app en arrière-plan.
         NSSupportsLiveActivities: true
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - $(FLUXA_BUNDLE_ID).relay-refresh
         FluxaKeychainGroup: $(AppIdentifierPrefix)fluxa.shared
         # Le relais de partage reçoit les connexions des appareils reliés à l'iPhone.
         NSLocalNetworkUsageDescription: FLUXA reçoit les connexions des appareils reliés à votre partage de connexion pour relayer, mesurer et plafonner leur trafic.
