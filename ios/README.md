@@ -10,6 +10,7 @@ logique. La tentative d'application d'un plafond au partage de connexion est un 
 | `Shaper/` | le module Rust `fluxa-shaper` (ABI C, `include/fluxa_shaper.h`) : le relais de partage (mandataire qui plafonne et compte le trafic des appareils reliés), et la tentative par les mécanismes du noyau (pf, dummynet, sysctl) |
 | `App/` | l'app SwiftUI et l'accès au système (`App/Services/`) |
 | `RelayExtension/` | l'extension de tunnel qui garde le relais de partage en service en arrière-plan |
+| `Widgets/`, `Shared/` | les widgets (écran d'accueil, écran verrouillé) et l'activité en direct du relais dans la Dynamic Island ; `Shared/` est compilé dans l'app et dans l'extension |
 | `AppTests/` | les règles de l'interface : écriture des mesures, échelles, résumés |
 | `AppUITests/` | l'app lancée dans le simulateur et manipulée écran par écran |
 | `Config/` | l'identité de l'app et sa signature |
@@ -74,7 +75,7 @@ Pour les captures d'écran et les tests :
 | Argument | Effet |
 | --- | --- |
 | `-fluxaTab reseau\|partage\|profils\|historique\|reglages` | ouvre l'app sur cet onglet |
-| `-fluxaScreen reseau\|limiteur\|diagnostic\|test\|automatisations\|appareils\|forfait` | ouvre cet écran seul |
+| `-fluxaScreen reseau\|limiteur\|diagnostic\|test\|automatisations\|appareils\|forfait\|relais\|widgets` | ouvre cet écran seul |
 | `-hasSeenWelcome YES` | saute l'accueil du premier lancement |
 | `-fluxaShortSpeedTest YES` | raccourcit le test de débit |
 | `-fluxaAbsenceMinimum 1` | signale une absence dès une seconde (une minute sinon) |
@@ -120,6 +121,19 @@ Ce qu'il faut savoir :
   d'organisation (règle 5.4 des consignes d'Apple). TestFlight n'est pas concerné ;
 - le relais ne sert que les appareils du partage (réseau 172.20.10.0/28 et interfaces de pont) :
   ce n'est jamais un mandataire ouvert sur un Wi-Fi public.
+
+## Widgets et Dynamic Island
+
+Les widgets affichent le volume du jour, le débit et le forfait. Ils ne mesurent rien eux-mêmes :
+l'app leur laisse son dernier relevé dans un conteneur partagé (groupe d'apps
+`group.<identifiant de l'app>`), et ils en indiquent l'heure. L'app les fait rafraîchir quand
+leur allure change, au passage en arrière-plan, et au plus tous les quarts d'heure sinon.
+
+Quand le relais de partage est ouvert, une activité en direct le montre sur l'écran verrouillé
+et dans la Dynamic Island : temps écoulé depuis son ouverture (le système le fait avancer seul),
+appareils relayés, débit vers eux et plafond. Une app suspendue ne peut pas mettre à jour son
+activité et FLUXA n'a pas de serveur : ces chiffres sont ceux du dernier relevé, avec leur
+ancienneté, et le système les grise après cinq minutes.
 
 ## Ce que l'app compte quand elle est fermée
 

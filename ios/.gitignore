@@ -6,6 +6,8 @@ App/Info.plist
 App/Fluxa.entitlements
 RelayExtension/Info.plist
 RelayExtension/FluxaRelay.entitlements
+Widgets/Info.plist
+Widgets/FluxaWidgets.entitlements
 # Construction.
 build/
 .build/

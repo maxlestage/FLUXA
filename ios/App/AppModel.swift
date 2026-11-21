@@ -57,6 +57,18 @@ final class AppModel {
     private var relaySentLimits: RelayLimits?
     /// La dernière relance automatique d'un relais arrêté sans qu'on le demande.
     private var relayLastReopen: Date?
+    /// L'ouverture du relais en cours, pour l'activité en direct.
+    private var relayOpenedAt: Date?
+    private let widgets = WidgetPublisher()
+    private let relayActivity = RelayActivityController()
+
+    /// Montrer le relais sur l'écran verrouillé et dans la Dynamic Island.
+    var showsRelayActivity: Bool {
+        didSet {
+            UserDefaults.standard.set(showsRelayActivity, forKey: Self.relayActivityKey)
+            updateRelayActivity(force: true)
+        }
+    }
     private var relayRefreshing = false
     private var relayPreviousSample: (date: Date, clients: [String: RelayStatus.Client])?
 
@@ -115,6 +127,7 @@ final class AppModel {
     private static let keepsScreenOnKey = "relayKeepsScreenOn"
     private static let relayDeviceProfilesKey = "relayDeviceProfiles"
     private static let relayDeviceNamesKey = "relayDeviceNames"
+    private static let relayActivityKey = "relayLiveActivity"
 
     init() {
         let opened = Self.openStore()
@@ -127,6 +140,7 @@ final class AppModel {
         keepsScreenOnForRelay = UserDefaults.standard.object(forKey: Self.keepsScreenOnKey) as? Bool ?? true
         relayDeviceProfiles = UserDefaults.standard.dictionary(forKey: Self.relayDeviceProfilesKey) as? [String: String] ?? [:]
         relayDeviceNames = UserDefaults.standard.dictionary(forKey: Self.relayDeviceNamesKey) as? [String: String] ?? [:]
+        showsRelayActivity = UserDefaults.standard.object(forKey: Self.relayActivityKey) as? Bool ?? true
         refreshProfiles()
         refreshAutomations()
         speedTests = engine.speedTests
@@ -200,6 +214,9 @@ final class AppModel {
     func stop() {
         sampling?.cancel()
         sampling = nil
+        // Avant la suspension : le dernier relevé pour les widgets et l'activité en direct.
+        widgets.publish(widgetSnapshot(), force: true)
+        updateRelayActivity(force: true)
         // iOS suspend l'app en arrière-plan : un relais dans l'app se ferme et se rouvre au
         // retour ; celui de l'extension réseau continue.
         if !relayHost.keepsRunningInBackground {
@@ -256,6 +273,9 @@ final class AppModel {
         ticks += 1
         if ticks % 60 == 0 {
             historyRevision += 1
+        }
+        if ticks % 30 == 0 {
+            widgets.publish(widgetSnapshot())
         }
         set(\.probeInterval, Self.probeInterval(
             lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled,
@@ -428,9 +448,11 @@ final class AppModel {
         relayError = problem
         if problem == nil {
             relaySentLimits = limits
+            relayOpenedAt = relayOpenedAt ?? Date()
             confirmRelayLimit()
         }
         await refreshRelayNow()
+        updateRelayActivity(force: true)
         updateIdleTimer()
     }
 
@@ -457,6 +479,8 @@ final class AppModel {
         relayPreviousSample = nil
         relaySentLimits = nil
         relayLastReopen = nil
+        relayOpenedAt = nil
+        relayActivity.end()
         relayNotice = nil
         relayError = nil
         engine.relayStopped()
@@ -588,6 +612,60 @@ final class AppModel {
         }
         relayPreviousSample = (now, Dictionary(uniqueKeysWithValues: clients.map { ($0.address, $0) }))
         set(\.relayStatus, status)
+        updateRelayActivity()
+    }
+
+    // MARK: Widgets et activité en direct
+
+    /// Le relevé du moment, tel que les widgets l'affichent.
+    func widgetSnapshot(now: Date = Date()) -> WidgetSnapshot {
+        WidgetSnapshot(
+            updatedAt: now,
+            network: path.title,
+            isOnline: snapshot.isOnline,
+            downloadBps: snapshot.downloadBps,
+            uploadBps: snapshot.uploadBps,
+            todayBytes: snapshot.receivedBytesToday + snapshot.sentBytesToday,
+            plan: plan.map {
+                WidgetSnapshot.Plan(
+                    usedBytes: $0.usedBytes, allowanceBytes: $0.plan.allowanceBytes,
+                    remainingBytes: $0.remainingBytes, fractionUsed: $0.fractionUsed, cycleEnd: $0.cycleEnd)
+            },
+            relay: relayIsRunning ? relayWidgetState() : nil
+        )
+    }
+
+    private func relayWidgetState() -> WidgetSnapshot.Relay {
+        let state = relayActivityState(now: Date())
+        return WidgetSnapshot.Relay(devices: state.devices, toDevicesBps: state.toDevicesBps, cap: state.cap)
+    }
+
+    /// L'état du relais pour l'activité en direct : appareils actifs, débit vers eux,
+    /// plafond, et l'heure du relevé.
+    func relayActivityState(now: Date) -> RelayActivityAttributes.ContentState {
+        let active = (relayStatus?.clients ?? []).filter { $0.connections > 0 }
+        let measured = active.compactMap { relayRates[$0.address]?.toDeviceBps }
+        return RelayActivityAttributes.ContentState(
+            devices: active.count,
+            toDevicesBps: measured.isEmpty ? nil : measured.reduce(0, +),
+            cap: RelayText.cap(lastApply?.requested ?? activeProfile?.policy),
+            updatedAt: now
+        )
+    }
+
+    private func updateRelayActivity(force: Bool = false) {
+        guard showsRelayActivity, relayIsRunning else {
+            if relayActivity.isRunning {
+                relayActivity.end()
+            }
+            return
+        }
+        let state = relayActivityState(now: Date())
+        if relayActivity.isRunning {
+            relayActivity.update(state, force: force)
+        } else {
+            relayActivity.start(state, since: relayOpenedAt ?? Date())
+        }
     }
 
     private func updateIdleTimer() {
