@@ -352,12 +352,16 @@ final class FormatTests: XCTestCase {
 
     func testTheRelayStatusIsReadable() throws {
         let json = """
-        {"running":true,"port":8888,"download_limit":625000,"upload_limit":0,"addresses":["172.20.10.1"],\
+        {"running":true,"port":8888,"active_connections":3,"max_connections":192,"download_limit":625000,"upload_limit":0,"addresses":["172.20.10.1"],\
         "clients":[{"address":"172.20.10.3","connections":2,"to_device_bytes":1200,"from_device_bytes":300,\
         "idle_seconds":0.4,"download_limit":0,"upload_limit":0}]}
         """
         let status = try XCTUnwrap(RelayStatus.decode(json))
         XCTAssertEqual(status.address, "172.20.10.1")
+        XCTAssertEqual(status.activeConnections, 3)
+        XCTAssertEqual(status.maxConnections, 192)
+        XCTAssertEqual(RelayText.load(active: 3, maximum: 192), "3 sur 192")
+        XCTAssertEqual(RelayText.load(active: 192, maximum: 192), "192 sur 192, nouvelles refusées")
         XCTAssertEqual(status.clients?.first?.toDeviceBytes, 1_200)
         XCTAssertEqual(RelayStatus.decode("{\"running\":false}")?.running, false)
         XCTAssertEqual(RelayStatus.decode("{\"running\":false}")?.address, RelayBridge.defaultAddress)
