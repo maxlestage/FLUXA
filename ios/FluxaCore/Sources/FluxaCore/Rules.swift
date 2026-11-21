@@ -104,7 +104,8 @@ enum Rules {
             case .localVPN:
                 return (
                     .conditional,
-                    "Possible avec une extension réseau et votre accord. Un VPN local ne traite que le trafic de l’iPhone, pas celui du partage."
+                    "Avec votre accord, une extension réseau (configuration VPN) garde le relais en service quand FLUXA est en arrière-plan. "
+                        + "Elle n’a aucune route : le trafic de l’iPhone n’y passe pas, seulement celui des appareils réglés sur le relais."
                 )
             case .hotspotActivation:
                 return (.unsupported, "iOS réserve l’activation du partage de connexion à l’utilisateur, dans Réglages.")

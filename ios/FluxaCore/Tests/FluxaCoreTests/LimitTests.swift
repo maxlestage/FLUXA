@@ -303,6 +303,10 @@ final class LimitTests: XCTestCase {
             XCTAssertEqual(support[capability], .supported, "\(capability)")
         }
         XCTAssertEqual(support[.localVPN], .conditional)
+        // L'extension réseau sert au relais ; elle ne transporte pas le trafic de l'iPhone.
+        let vpn = capabilities.first { $0.capability == .localVPN }!.note
+        XCTAssertTrue(vpn.contains("garde le relais en service"), vpn)
+        XCTAssertTrue(vpn.contains("le trafic de l’iPhone n’y passe pas"), vpn)
         for capability in [
             Capability.hotspotActivation, .hotspotClientDiscovery, .hotspotLimit, .perDeviceShaping,
             .clientDisconnect,
