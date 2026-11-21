@@ -35,14 +35,31 @@ final class FluxaUITests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", text)).firstMatch.exists
     }
 
-    /// Fait défiler la page jusqu'à ce que l'élément soit à l'écran.
+    /// Fait défiler la page, par petits pas et dans les deux sens, jusqu'à ce que l'élément
+    /// soit à l'écran. De grands balayages dépassaient parfois la cible sous iOS 27.
     @discardableResult
     private func scroll(to element: XCUIElement, swipes: Int = 10) -> Bool {
-        for _ in 0..<swipes {
+        for _ in 0..<(swipes * 2) {
             if isOnScreen(element) { return true }
-            app.swipeUp(velocity: .slow)
+            let screen = app.windows.firstMatch.frame
+            let goingDown = !(element.exists && element.frame.maxY > 0 && element.frame.midY < screen.minY + 110)
+            let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: goingDown ? 0.68 : 0.32))
+            let to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: goingDown ? 0.36 : 0.64))
+            from.press(forDuration: 0.05, thenDragTo: to)
         }
         return isOnScreen(element)
+    }
+
+    /// Un bouton par son libellé, où qu'il soit : sous iOS 27, les boutons des barres de
+    /// navigation ne sont plus rangés sous la barre dans l'arbre d'accessibilité.
+    private func barButton(_ label: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label == %@ OR identifier == %@", label, label)).firstMatch
+    }
+
+    /// Un onglet par son nom, dans la barre d'onglets ou, sous iOS 27, parmi les boutons.
+    private func tab(_ name: String) -> XCUIElement {
+        let inBar = app.tabBars.buttons[name]
+        return inBar.exists ? inBar : app.buttons.matching(NSPredicate(format: "label == %@", name)).firstMatch
     }
 
     /// Visible et touchable : ni sous la barre de navigation, ni sous la barre d'onglets,
@@ -138,15 +155,15 @@ final class FluxaUITests: XCTestCase {
     func testEveryTabOpens() {
         launch()
         XCTAssertTrue(app.navigationBars["Tableau de bord"].waitForExistence(timeout: 30))
-        for (tab, title) in [
+        for (name, title) in [
             ("Partage", "Partage"),
             ("Profils", "Profils"),
             ("Historique", "Historique"),
             ("Réglages", "Réglages"),
             ("Réseau", "Tableau de bord"),
         ] {
-            app.tabBars.buttons[tab].tap()
-            XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10), "onglet \(tab)")
+            tab(name).tap()
+            XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10), "onglet \(name)")
         }
         assertNoError()
     }
@@ -195,12 +212,12 @@ final class FluxaUITests: XCTestCase {
     func testANewProfileCanBeCreated() {
         launch(["-fluxaTab", "profils"])
         XCTAssertTrue(app.navigationBars["Profils"].waitForExistence(timeout: 30))
-        app.navigationBars["Profils"].buttons["Nouveau profil"].tap()
+        barButton("Nouveau profil").tap()
         let name = app.textFields["Nom du profil"]
         XCTAssertTrue(name.waitForExistence(timeout: 10))
         focus(name)
         name.typeText("Essai")
-        app.navigationBars.buttons["Enregistrer"].tap()
+        barButton("Enregistrer").tap()
         assertNoError()
         XCTAssertTrue(scroll(to: button(containing: "Essai")))
     }
@@ -208,13 +225,13 @@ final class FluxaUITests: XCTestCase {
     func testAProfileWithoutNameIsRefused() {
         launch(["-fluxaTab", "profils"])
         XCTAssertTrue(app.navigationBars["Profils"].waitForExistence(timeout: 30))
-        app.navigationBars["Profils"].buttons["Nouveau profil"].tap()
+        barButton("Nouveau profil").tap()
         XCTAssertTrue(app.textFields["Nom du profil"].waitForExistence(timeout: 10))
-        app.navigationBars.buttons["Enregistrer"].tap()
+        barButton("Enregistrer").tap()
         // L'app explique le refus dans la feuille, et ne la referme pas.
         XCTAssertTrue(app.descendants(matching: .any)["erreur-profil"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.textFields["Nom du profil"].exists)
-        app.navigationBars.buttons["Annuler"].tap()
+        barButton("Annuler").tap()
         assertNoError()
     }
 
@@ -262,12 +279,12 @@ final class FluxaUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Mes appareils"].waitForExistence(timeout: 30))
         // L'app dit ce qu'iOS ne fournit pas, au lieu de l'inventer.
         XCTAssertTrue(element(containing: "Adresse MAC").exists)
-        app.navigationBars["Mes appareils"].buttons["Nouvel appareil"].tap()
+        barButton("Nouvel appareil").tap()
         let name = app.textFields["Nom de l’appareil"]
         XCTAssertTrue(name.waitForExistence(timeout: 10))
         focus(name)
         name.typeText("MacBook")
-        app.navigationBars.buttons["Enregistrer"].tap()
+        barButton("Enregistrer").tap()
         XCTAssertFalse(app.descendants(matching: .any)["erreur-appareil"].waitForExistence(timeout: 2))
         XCTAssertTrue(button(containing: "MacBook").waitForExistence(timeout: 5))
         XCTAssertTrue(element(containing: "aucun profil").exists)
@@ -276,11 +293,11 @@ final class FluxaUITests: XCTestCase {
     func testADeviceWithoutNameIsRefused() {
         launch(["-fluxaScreen", "appareils"])
         XCTAssertTrue(app.navigationBars["Mes appareils"].waitForExistence(timeout: 30))
-        app.navigationBars["Mes appareils"].buttons["Nouvel appareil"].tap()
+        barButton("Nouvel appareil").tap()
         XCTAssertTrue(app.textFields["Nom de l’appareil"].waitForExistence(timeout: 10))
-        app.navigationBars.buttons["Enregistrer"].tap()
+        barButton("Enregistrer").tap()
         XCTAssertTrue(app.descendants(matching: .any)["erreur-appareil"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons["Annuler"].tap()
+        barButton("Annuler").tap()
         assertNoError()
     }
 
@@ -316,12 +333,12 @@ final class FluxaUITests: XCTestCase {
     func testARuleCanBeCreatedAndSwitchedOff() {
         launch(["-fluxaScreen", "automatisations"])
         XCTAssertTrue(app.navigationBars["Automatisations"].waitForExistence(timeout: 30))
-        app.navigationBars["Automatisations"].buttons["Nouvelle règle"].tap()
+        barButton("Nouvelle règle").tap()
         let name = app.textFields["Nom de la règle"]
         XCTAssertTrue(name.waitForExistence(timeout: 10))
         focus(name)
         name.typeText("Forfait")
-        app.navigationBars.buttons["Enregistrer"].tap()
+        barButton("Enregistrer").tap()
         XCTAssertFalse(app.descendants(matching: .any)["erreur-regle"].waitForExistence(timeout: 2))
         XCTAssertTrue(button(containing: "Forfait").waitForExistence(timeout: 5))
         XCTAssertTrue(element(containing: "dans la journée : prévenir").exists)
@@ -335,11 +352,11 @@ final class FluxaUITests: XCTestCase {
     func testARuleWithoutNameIsRefused() {
         launch(["-fluxaScreen", "automatisations"])
         XCTAssertTrue(app.navigationBars["Automatisations"].waitForExistence(timeout: 30))
-        app.navigationBars["Automatisations"].buttons["Nouvelle règle"].tap()
+        barButton("Nouvelle règle").tap()
         XCTAssertTrue(app.textFields["Nom de la règle"].waitForExistence(timeout: 10))
-        app.navigationBars.buttons["Enregistrer"].tap()
+        barButton("Enregistrer").tap()
         XCTAssertTrue(app.descendants(matching: .any)["erreur-regle"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons["Annuler"].tap()
+        barButton("Annuler").tap()
         assertNoError()
     }
 
@@ -504,7 +521,7 @@ final class FluxaUITests: XCTestCase {
         XCTAssertTrue(scroll(to: element(containing: "Reçu")))
         // La comparaison avec la période précédente et l'export sont là.
         XCTAssertTrue(scroll(to: app.descendants(matching: .any)["comparaison"]))
-        XCTAssertTrue(app.navigationBars.buttons["Exporter"].exists)
+        XCTAssertTrue(barButton("Exporter").exists)
         app.swipeDown()
         app.swipeDown()
         for period in ["30 jours", "1 heure", "24 heures"] {
