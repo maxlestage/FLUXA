@@ -133,7 +133,9 @@ Quand le relais de partage est ouvert, une activité en direct le montre sur l'�
 et dans la Dynamic Island : temps écoulé depuis son ouverture (le système le fait avancer seul),
 appareils relayés, débit vers eux et plafond. Une app suspendue ne peut pas mettre à jour son
 activité et FLUXA n'a pas de serveur : ces chiffres sont ceux du dernier relevé, avec leur
-ancienneté, et le système les grise après cinq minutes.
+ancienneté, et le système les grise après cinq minutes. Quand iOS réveille l'app en arrière-plan
+(rafraîchissement en arrière-plan, au mieux tous les quarts d'heure, sans garantie), FLUXA demande
+à l'extension du relais son état réel et met l'activité à jour.
 
 ## Ce que l'app compte quand elle est fermée
 
