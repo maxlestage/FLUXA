@@ -42,6 +42,12 @@ struct RelayView: View {
                     Text(error)
                         .font(.footnote)
                         .foregroundStyle(Theme.reserved)
+                    Button {
+                        model.retryRelay()
+                    } label: {
+                        Label("Réessayer", systemImage: "arrow.clockwise")
+                    }
+                    .accessibilityIdentifier("reessayer-relais")
                 }
                 if let notice = model.relayNotice {
                     Text(notice)

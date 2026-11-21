@@ -117,15 +117,29 @@ final class TunnelRelayHost: RelayHost {
             if manager.connection.status != .connected {
                 try manager.connection.startVPNTunnel()
             }
-            // Le tunnel se connecte en une à deux secondes.
-            for _ in 0..<40 where manager.connection.status != .connected {
-                try await Task.sleep(for: .milliseconds(250))
-                if manager.connection.status == .disconnected || manager.connection.status == .invalid {
-                    return "L’extension du relais n’a pas démarré."
+            // Juste après la demande, l'état peut encore se lire « déconnecté » : seul un
+            // arrêt après un début de connexion, ou une configuration invalide, est un échec.
+            let deadline = Date().addingTimeInterval(15)
+            var started = false
+            while manager.connection.status != .connected, Date() < deadline {
+                switch manager.connection.status {
+                case .connecting, .reasserting:
+                    started = true
+                case .invalid:
+                    return "La configuration du relais est invalide."
+                case .disconnected, .disconnecting:
+                    if started {
+                        let reason = await Self.lastError(of: manager)
+                        return "L’extension du relais s’est arrêtée au démarrage\(reason)."
+                    }
+                default:
+                    break
                 }
+                try await Task.sleep(for: .milliseconds(250))
             }
             guard manager.connection.status == .connected else {
-                return "L’extension du relais ne répond pas."
+                let reason = await Self.lastError(of: manager)
+                return "L’extension du relais n’a pas démarré à temps\(reason)."
             }
             await apply(limits)
             return nil
@@ -136,6 +150,17 @@ final class TunnelRelayHost: RelayHost {
             }
             return "L’extension du relais n’a pas pu démarrer (\(error.localizedDescription))."
         }
+    }
+
+    /// La raison du dernier arrêt du tunnel donnée par iOS, en fin de phrase, ou rien.
+    private static func lastError(of manager: NETunnelProviderManager) async -> String {
+        let error: Error? = await withCheckedContinuation { continuation in
+            manager.connection.fetchLastDisconnectError { error in
+                continuation.resume(returning: error)
+            }
+        }
+        guard let error else { return "" }
+        return " (\(error.localizedDescription))"
     }
 
     func close() async {
