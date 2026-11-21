@@ -336,6 +336,22 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayBridge.status()?.running, false)
     }
 
+    func testTheRelayFollowsTheDisplayedCap() {
+        var sent = RelayLimits(download: 5_000_000, upload: 1_000_000)
+        sent.devices["172.20.10.3"] = (800_000, nil)
+        var same = RelayLimits(download: 5_000_000, upload: 1_000_000)
+        same.devices["172.20.10.3"] = (800_000, nil)
+        XCTAssertFalse(AppModel.relayNeedsUpdate(sent: sent, wanted: same))
+        // Une règle change de profil, ou la limite arrive à échéance : le relais suit.
+        XCTAssertTrue(AppModel.relayNeedsUpdate(sent: sent, wanted: RelayLimits(download: 1_000_000, upload: 500_000, devices: sent.devices)))
+        XCTAssertTrue(AppModel.relayNeedsUpdate(sent: sent, wanted: RelayLimits(download: nil, upload: nil, devices: sent.devices)))
+        // Le plafond d'un appareil change ou disparaît.
+        XCTAssertTrue(AppModel.relayNeedsUpdate(sent: sent, wanted: RelayLimits(download: 5_000_000, upload: 1_000_000)))
+        XCTAssertTrue(AppModel.relayNeedsUpdate(sent: nil, wanted: same))
+        // Le message à l'extension garde un ordre stable.
+        XCTAssertEqual(sent.message, same.message)
+    }
+
     func testRelayRatesComeFromTwoReadings() {
         func client(_ down: UInt64, _ up: UInt64) -> RelayStatus.Client {
             RelayStatus.Client(
