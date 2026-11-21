@@ -345,16 +345,13 @@ final class FormatTests: XCTestCase {
 
     // MARK: Widgets et activité en direct
 
-    func testTheWidgetSnapshotGoesThroughTheSharedStore() throws {
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "fluxa-tests-\(UUID().uuidString)"))
-        XCTAssertNil(WidgetSnapshot.load(from: defaults), "sans relevé, rien")
+    func testTheWidgetSnapshotSurvivesItsStorage() throws {
+        XCTAssertNil(WidgetSnapshot.decode(nil), "sans relevé, rien")
         var snapshot = WidgetSnapshot.example
         snapshot.relay = WidgetSnapshot.Relay(devices: 2, toDevicesBps: 3_200_000, cap: "↓ 5 Mb/s · ↑ Sans plafond")
-        XCTAssertTrue(snapshot.save(to: defaults))
-        XCTAssertEqual(WidgetSnapshot.load(from: defaults), snapshot)
+        XCTAssertEqual(WidgetSnapshot.decode(snapshot.encoded()), snapshot)
         // Un relevé illisible ne fait pas planter le widget.
-        defaults.set(Data("abîmé".utf8), forKey: WidgetSnapshot.key)
-        XCTAssertNil(WidgetSnapshot.load(from: defaults))
+        XCTAssertNil(WidgetSnapshot.decode(Data("abîmé".utf8)))
     }
 
     func testWidgetsSayWhenTheReadingWasTaken() {
