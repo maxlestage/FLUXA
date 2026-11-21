@@ -113,6 +113,15 @@ struct SettingsView: View {
                     }
                 }
 
+                Section {
+                    NavigationLink {
+                        WidgetsView()
+                    } label: {
+                        Label("Widgets et Dynamic Island", systemImage: "rectangle.3.group")
+                    }
+                    .accessibilityIdentifier("reglage-widgets")
+                }
+
                 Section("À propos") {
                     ValueRow("Version", appVersion)
                     ValueRow("Moteur", FluxaEngine.version)
