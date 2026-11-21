@@ -174,8 +174,10 @@ impl Shared {
     }
 
     /// Compte `amount` octets pour cet appareil et attend ce que les plafonds imposent.
-    fn throttle(&self, peer: IpAddr, direction: Direction, amount: usize) {
-        let wait = {
+    /// Renvoie le plafond qui s'applique dans ce sens (le plus bas), en octets par seconde,
+    /// zéro sans plafond : il fixe la taille des prochaines lectures.
+    fn throttle(&self, peer: IpAddr, direction: Direction, amount: usize) -> u64 {
+        let (wait, rate) = {
             let mut state = lock(&self.state);
             let now = Instant::now();
             let device_limit = state.overrides.get(&peer).copied().unwrap_or_default();
@@ -185,19 +187,26 @@ impl Shared {
             };
             let client = state.clients.entry(peer).or_insert_with(Client::new);
             client.last_seen = now;
-            let device_wait = match direction {
+            let (device_wait, device_rate) = match direction {
                 Direction::Download => {
                     client.to_device = client.to_device.saturating_add(amount as u64);
                     client.download.set_rate(device_limit.download);
-                    client.download.reserve(amount, now)
+                    (client.download.reserve(amount, now), device_limit.download)
                 }
                 Direction::Upload => {
                     client.from_device = client.from_device.saturating_add(amount as u64);
                     client.upload.set_rate(device_limit.upload);
-                    client.upload.reserve(amount, now)
+                    (client.upload.reserve(amount, now), device_limit.upload)
                 }
             };
-            global_wait.max(device_wait)
+            let global_rate = match direction {
+                Direction::Download => state.global.download,
+                Direction::Upload => state.global.upload,
+            };
+            (
+                global_wait.max(device_wait),
+                lowest_rate(global_rate, device_rate),
+            )
         };
         // L'attente se fait hors du verrou, par tranches, pour s'arrêter vite au besoin.
         let deadline = Instant::now() + wait;
@@ -208,6 +217,7 @@ impl Shared {
             }
             thread::sleep(left.min(Duration::from_millis(100)));
         }
+        rate
     }
 
     fn connection_opened(&self, peer: IpAddr) {
@@ -703,15 +713,17 @@ fn pipe(
     progress: Option<&Progress>,
 ) -> io::Result<()> {
     let mut to = to?;
-    let mut buffer = [0u8; 8192];
+    // Un seul tampon par sens, sur le tas ; la taille lue suit le plafond.
+    let mut buffer = vec![0u8; MAX_CHUNK];
+    let mut chunk = MAX_CHUNK;
     while !shared.stop.load(Ordering::Relaxed) {
-        let count = match from.read(&mut buffer) {
+        let count = match from.read(&mut buffer[..chunk]) {
             Ok(0) => break,
             Ok(count) => count,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error) => return Err(error),
         };
-        shared.throttle(peer, direction, count);
+        chunk = chunk_size(shared.throttle(peer, direction, count));
         to.write_all(&buffer[..count])?;
         if let Some(progress) = progress {
             progress.touch();
@@ -721,6 +733,30 @@ fn pipe(
 }
 
 // MARK: Outils
+
+/// La plus grande lecture : sans plafond, de gros morceaux réduisent les appels système et
+/// les passages par le verrou des plafonds (des milliers par seconde en 5G avec 8 ko).
+const MAX_CHUNK: usize = 64 * 1024;
+const MIN_CHUNK: usize = 2 * 1024;
+
+/// La taille de lecture pour un plafond en octets par seconde (zéro : sans plafond) : un
+/// huitième de seconde de débit, pour que le trafic reste régulier même sous un plafond bas.
+fn chunk_size(rate: u64) -> usize {
+    if rate == 0 {
+        return MAX_CHUNK;
+    }
+    usize::try_from(rate / 8)
+        .unwrap_or(MAX_CHUNK)
+        .clamp(MIN_CHUNK, MAX_CHUNK)
+}
+
+/// Le plus bas des deux plafonds, zéro valant « sans plafond ».
+fn lowest_rate(first: u64, second: u64) -> u64 {
+    match (first, second) {
+        (0, rate) | (rate, 0) => rate,
+        (first, second) => first.min(second),
+    }
+}
 
 fn read_head(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
     let mut head = Vec::with_capacity(1024);
@@ -1102,6 +1138,42 @@ mod tests {
             thread::sleep(Duration::from_millis(20));
         }
         let _again = through_connect(&relay, target);
+    }
+
+    #[test]
+    fn reads_follow_the_cap() {
+        assert_eq!(chunk_size(0), MAX_CHUNK, "sans plafond, de gros morceaux");
+        assert_eq!(chunk_size(100_000_000), MAX_CHUNK);
+        // 3,2 Mb/s : 400 ko/s, lus par 50 ko.
+        assert_eq!(chunk_size(400_000), 50_000);
+        // 0,1 Mb/s : 12,5 ko/s, lus par 2 ko au moins pour rester régulier.
+        assert_eq!(chunk_size(12_500), MIN_CHUNK);
+        assert_eq!(lowest_rate(0, 0), 0);
+        assert_eq!(lowest_rate(0, 5), 5);
+        assert_eq!(lowest_rate(7, 0), 7);
+        assert_eq!(lowest_rate(7, 5), 5);
+    }
+
+    #[test]
+    fn a_low_device_cap_still_flows_steadily() {
+        let relay = Relay::start(0, true).unwrap();
+        // 0,4 Mb/s : 50 ko/s. 100 ko passent en environ 1,7 s (rafale de 16 ko comprise).
+        relay.set_device_limit(
+            "127.0.0.1".parse().unwrap(),
+            Limit {
+                download: 50_000,
+                upload: 0,
+            },
+        );
+        let target = source(100_000);
+        let started = Instant::now();
+        assert_eq!(drain(through_connect(&relay, target)), 100_000);
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= Duration::from_millis(1_300),
+            "trop rapide : {elapsed:?}"
+        );
+        assert!(elapsed < Duration::from_secs(4), "trop lent : {elapsed:?}");
     }
 
     #[test]
