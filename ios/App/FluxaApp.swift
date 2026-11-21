@@ -85,6 +85,8 @@ struct RootView: View {
             NavigationStack { RelayView() }
         case "widgets":
             NavigationStack { WidgetsView() }
+        case "autorisations":
+            NavigationStack { PermissionsView() }
         default:
             tabs
         }
@@ -122,7 +124,7 @@ enum AppTab: String {
 /// Les arguments de lancement, pour ouvrir l'app sur un écran précis :
 /// `-fluxaTab profils`, ou `-fluxaScreen limiteur` pour un écran intérieur
 /// (`reseau`, `limiteur`, `diagnostic`, `test`, `automatisations`, `appareils`, `forfait`,
-/// `relais`, `widgets`).
+/// `relais`, `widgets`, `autorisations`).
 /// Le workflow s'en sert pour ses captures d'écran.
 enum Launch {
     static var tab: AppTab {

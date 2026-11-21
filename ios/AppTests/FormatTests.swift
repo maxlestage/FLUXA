@@ -1,4 +1,5 @@
 import CoreTelephony
+import UIKit
 import FluxaCore
 import XCTest
 
@@ -344,6 +345,38 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(MeasureTilesLayout.columnCount(for: .xxxLarge), 2)
         XCTAssertEqual(MeasureTilesLayout.columnCount(for: .accessibility1), 1)
         XCTAssertEqual(MeasureTilesLayout.columnCount(for: .accessibility5), 1)
+    }
+
+    // MARK: Autorisations
+
+    func testEachPermissionSaysWhyAndWhatToDo() {
+        for kind in PermissionKind.allCases {
+            XCTAssertFalse(kind.title.isEmpty)
+            XCTAssertFalse(kind.reason.isEmpty)
+        }
+        // Ce qu'iOS laisse demander se demande ; le reste mène à Réglages.
+        XCTAssertEqual(PermissionText.action(for: .notifications, state: .notAsked), .ask)
+        XCTAssertEqual(PermissionText.action(for: .localNetwork, state: .notAsked), .ask)
+        XCTAssertEqual(PermissionText.action(for: .vpn, state: .notAsked), .ask)
+        XCTAssertEqual(PermissionText.action(for: .liveActivities, state: .notAsked), .settings)
+        XCTAssertEqual(PermissionText.action(for: .cellularData, state: .notAsked), .settings)
+        // Une autorisation refusée ne se redemande pas : iOS ne repose pas la question.
+        XCTAssertEqual(PermissionText.action(for: .notifications, state: .denied), .settings)
+        XCTAssertEqual(PermissionText.action(for: .localNetwork, state: .granted), .none)
+        XCTAssertEqual(PermissionText.action(for: .vpn, state: .unavailable), .none)
+    }
+
+    func testSystemStatesAreReadPlainly() {
+        XCTAssertEqual(PermissionCenter.state(of: Notifier.Access.allowed), .granted)
+        XCTAssertEqual(PermissionCenter.state(of: Notifier.Access.denied), .denied)
+        XCTAssertEqual(PermissionCenter.state(of: Notifier.Access.unknown), .notAsked)
+        XCTAssertEqual(PermissionCenter.state(of: UIBackgroundRefreshStatus.available), .granted)
+        XCTAssertEqual(PermissionCenter.state(of: UIBackgroundRefreshStatus.denied), .denied)
+        XCTAssertEqual(PermissionCenter.state(of: UIBackgroundRefreshStatus.restricted), .denied)
+        XCTAssertEqual(PermissionCenter.state(of: CTCellularDataRestrictedState.notRestricted), .granted)
+        XCTAssertEqual(PermissionCenter.state(of: CTCellularDataRestrictedState.restricted), .denied)
+        XCTAssertEqual(PermissionState.granted.title, "Accordée")
+        XCTAssertEqual(PermissionState.denied.title, "Refusée")
     }
 
     // MARK: Widgets et activité en direct

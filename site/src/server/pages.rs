@@ -1206,7 +1206,7 @@ pub fn privacy(ctx: &Ctx) -> Page {
             ),
             Block::Title("autorisations", "Autorisations"),
             Block::Text(
-                "L’app demande une autorisation au moment où une fonction en a besoin, jamais en bloc au premier lancement. La configuration VPN n’est demandée qu’à l’ouverture du relais : elle garde le relais en service en arrière-plan et ne transporte aucun trafic de l’iPhone.",
+                "L’app demande une autorisation au moment où une fonction en a besoin, ou quand vous touchez « Tout autoriser » dans ses réglages, jamais en bloc au premier lancement. Elle se sert du réseau local (les appareils reliés joignent le relais), d’une configuration VPN (elle garde le relais en service en arrière-plan et ne transporte aucun trafic de l’iPhone), des notifications (règles), des activités en direct (Dynamic Island), de l’actualisation en arrière-plan et des données cellulaires. Elle ne demande ni la localisation, ni les contacts, ni les photos, ni le micro.",
             ),
             Block::Title("site", "Ce site et les cookies"),
             Block::Text(
