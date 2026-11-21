@@ -105,7 +105,7 @@ async fn every_page_carries_the_share_card() {
         let html = client.get(path).await.text();
         assert!(
             html.contains(
-                r#"<meta property="og:image" content="https://fluxa.example/og-image.png"/>"#
+                r#"<meta property="og:image" content="https://fluxa.example/og-image.jpg"/>"#
             ),
             "{path}"
         );
@@ -114,11 +114,27 @@ async fn every_page_carries_the_share_card() {
         assert!(html.contains(r#"<meta property="og:image:height" content="630"/>"#));
         assert!(html.contains(r#"<meta property="og:image:alt""#));
     }
-    // L'image existe, aux dimensions annoncées (l'en-tête d'un PNG les donne).
-    let png = std::fs::read("public/og-image.png").expect("public/og-image.png");
-    assert_eq!(&png[1..4], b"PNG");
-    let size = |at: usize| u32::from_be_bytes(png[at..at + 4].try_into().unwrap());
-    assert_eq!((size(16), size(20)), (1200, 630));
+    // L'image existe, en JPEG, aux dimensions annoncées (lues dans son en-tête de trame),
+    // et reste légère.
+    let jpeg = std::fs::read("public/og-image.jpg").expect("public/og-image.jpg");
+    assert_eq!(&jpeg[..2], &[0xFF, 0xD8]);
+    assert!(
+        jpeg.len() < 150_000,
+        "image de partage trop lourde : {} o",
+        jpeg.len()
+    );
+    let mut at = 2;
+    let (width, height) = loop {
+        assert_eq!(jpeg[at], 0xFF);
+        let marker = jpeg[at + 1];
+        let length = usize::from(u16::from_be_bytes([jpeg[at + 2], jpeg[at + 3]]));
+        if matches!(marker, 0xC0..=0xC2) {
+            let read = |i: usize| u16::from_be_bytes([jpeg[at + i], jpeg[at + i + 1]]);
+            break (read(7), read(5));
+        }
+        at += 2 + length;
+    };
+    assert_eq!((width, height), (1200, 630));
 }
 
 #[tokio::test(flavor = "multi_thread")]

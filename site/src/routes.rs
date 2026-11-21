@@ -10,7 +10,7 @@ pub const PRIVACY: &str = "/confidentialite/";
 pub const LEGAL: &str = "/mentions-legales/";
 
 /// L'image affichée quand on partage un lien du site (1200 × 630).
-pub const SHARE_IMAGE: &str = "/og-image.png";
+pub const SHARE_IMAGE: &str = "/og-image.jpg";
 /// La page qui dessine cette image. Elle n'est ni dans le plan du site ni exportée : on
 /// l'ouvre pour refaire la capture (voir `site/README.md`).
 pub const SHARE_CARD: &str = "/carte-de-partage/";
