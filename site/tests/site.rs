@@ -235,6 +235,7 @@ async fn the_site_does_not_lie() {
             "deux échanges, et seulement de ceux-là",
             "de l’interface au moteur",
             "n’annonce que ce que le système confirme",
+            "Quand l’app est ouverte, elle ouvre une connexion vers un hôte toutes les cinq secondes",
         ] {
             assert!(!html.contains(claim), "{path} affirme encore : {claim}");
         }
@@ -247,4 +248,56 @@ async fn the_site_does_not_lie() {
     assert!(
         home.contains("Pas encore sur l’App Store") || home.contains("pas encore sur l’App Store")
     );
+}
+
+/// L'optimisation est mise en avant, et ses chiffres sont ceux de l'app : sonde de
+/// latence, écritures, widgets, relais Rust, batterie. Un chiffre qui change dans l'app
+/// change ici, ou ce test le signale.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_optimisations_are_the_apps() {
+    let client = client().await;
+    let home = client.get("/").await.text();
+    // Juste après les cadences, avant les fonctions, et dans le menu.
+    let optimisation = home
+        .find(r#"id="optimisation""#)
+        .expect("la section optimisation");
+    assert!(optimisation < home.find(r#"id="fonctions""#).unwrap());
+    assert!(home.contains(r##"href="#optimisation""##));
+    assert_eq!(home.matches(r#"class="feat opt""#).count(), 8);
+    for fact in [
+        "que tableau de bord affiché : toutes les 5 s, toutes les 15 s",
+        "toutes les 30 s en données réduites",
+        "une fois par minute dans une base SQLite",
+        "au plus toutes les 5 minutes",
+        "tous les quarts d’heure",
+        "Au plus 192 connexions",
+        "256 Ko de pile",
+        "de 2 à 64 Ko",
+        "après 3 s",
+        "toutes les 5 s sinon",
+        "au plus toutes les 10 s",
+        "sous 20 % de batterie",
+    ] {
+        assert!(home.contains(fact), "l'optimisation ne dit plus : {fact}");
+    }
+    // Les mêmes chiffres dans le code de l'app.
+    let read = |path: &str| std::fs::read_to_string(format!("../ios/{path}")).unwrap();
+    let model = read("App/AppModel.swift");
+    assert!(model.contains("dashboardVisible && interval > 0"));
+    assert!(model.contains("level < 0.2"));
+    assert!(model.contains("screenVisible ? 1 : 5"));
+    let publisher = read("App/Services/WidgetPublisher.swift");
+    assert!(publisher.contains("now.timeIntervalSince(lastWrite) >= 5 * 60"));
+    assert!(publisher.contains("now.timeIntervalSince(lastReload) >= 15 * 60"));
+    assert!(publisher.contains("now.timeIntervalSince(lastUpdate) >= 10"));
+    let relay = read("Shaper/src/relay.rs");
+    for constant in [
+        "MAX_CONNECTIONS: usize = 192",
+        "CONNECTION_STACK: usize = 256 * 1024",
+        "MAX_CHUNK: usize = 64 * 1024",
+        "MIN_CHUNK: usize = 2 * 1024",
+        "CONNECT_ATTEMPT: Duration = Duration::from_secs(3)",
+    ] {
+        assert!(relay.contains(constant), "{constant}");
+    }
 }
