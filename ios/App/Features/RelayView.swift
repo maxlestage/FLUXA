@@ -98,6 +98,7 @@ struct RelayView: View {
                 LabeledContent("Plafond") {
                     Text(RelayText.cap(model.lastApply?.requested ?? model.activeProfile?.policy))
                         .font(.body.monospacedDigit())
+                        .accessibilityLabel(Format.spoken(RelayText.cap(model.lastApply?.requested ?? model.activeProfile?.policy)))
                 }
                 if let result = model.lastApply {
                     LabeledContent("Statut") {

@@ -301,6 +301,7 @@ private struct SharingCard: View {
                     Text(SharingText.rates(sharing))
                         .font(.subheadline.monospacedDigit())
                         .foregroundStyle(Theme.text)
+                        .accessibilityLabel(Format.spoken(SharingText.rates(sharing)))
                     Text(SharingText.session(sharing.session))
                         .font(.footnote)
                         .foregroundStyle(Theme.secondary)
@@ -362,6 +363,7 @@ private struct ProfileCard: View {
                     Text("↓ \(Format.cap(active.downloadBps)) · ↑ \(Format.cap(active.uploadBps))")
                         .font(.subheadline.monospacedDigit())
                         .foregroundStyle(Theme.secondary)
+                        .accessibilityLabel(Format.spoken("↓ \(Format.cap(active.downloadBps)) · ↑ \(Format.cap(active.uploadBps))"))
                 } else {
                     Text("Aucun profil choisi")
                         .font(.headline)

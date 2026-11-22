@@ -126,6 +126,8 @@ struct ProfilesView: View {
                 Text("↓ \(Format.cap(result.requested.downloadBps)) · ↑ \(Format.cap(result.requested.uploadBps))")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Theme.secondary)
+                    .accessibilityLabel(
+                        Format.spoken("↓ \(Format.cap(result.requested.downloadBps)) · ↑ \(Format.cap(result.requested.uploadBps))"))
                 if let reason = result.reason {
                     Text(reason)
                         .font(.footnote)
@@ -162,6 +164,7 @@ private struct ProfileRow: View {
                 Text("↓ \(Format.cap(profile.downloadBps)) · ↑ \(Format.cap(profile.uploadBps))")
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(Theme.secondary)
+                    .accessibilityLabel(Format.spoken("↓ \(Format.cap(profile.downloadBps)) · ↑ \(Format.cap(profile.uploadBps))"))
             }
             Spacer()
         }

@@ -100,6 +100,8 @@ struct SpeedTestView: View {
                         Text("↓ \(Format.rate(test.downloadBps)) · ↑ \(Format.rate(test.uploadBps)) · \(Format.milliseconds(test.latencyMs))")
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(Theme.secondary)
+                            .accessibilityLabel(
+                                Format.spoken("↓ \(Format.rate(test.downloadBps)) · ↑ \(Format.rate(test.uploadBps)) · latence \(Format.milliseconds(test.latencyMs))"))
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("test-precedent")
