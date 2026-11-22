@@ -712,6 +712,18 @@ final class FormatTests: XCTestCase {
             "ailleurs, au rythme de l'activité en direct")
     }
 
+    func testTheSecondWakeUpLeavesIOSRoomToGroupIt() {
+        XCTAssertEqual(AppModel.sampleTolerance, .milliseconds(100), "le dixième de la seconde")
+        let start = ContinuousClock.now
+        // Le temps passé à relever ne décale pas la cadence.
+        XCTAssertEqual(
+            AppModel.nextSample(after: start, now: start.advanced(by: .milliseconds(30))),
+            start.advanced(by: .seconds(1)))
+        // Après un long retard, pas de rafale : une seconde après maintenant.
+        let late = start.advanced(by: .milliseconds(2_500))
+        XCTAssertEqual(AppModel.nextSample(after: start, now: late), late.advanced(by: .seconds(1)))
+    }
+
     func testAStoppedRelayIsReopenedWithoutHammering() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         XCTAssertTrue(AppModel.shouldReopenRelay(lastAttempt: nil, now: now))
