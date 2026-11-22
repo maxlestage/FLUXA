@@ -335,6 +335,9 @@ final class FluxaUITests: XCTestCase {
         // Les deux sens ont un débit : plus aucun tiret dans les mesures.
         XCTAssertFalse(element(containing: "Descendant, —").exists)
         XCTAssertFalse(element(containing: "Montant, —").exists)
+        // VoiceOver lit « Descendant », pas la flèche.
+        XCTAssertTrue(element(containing: "Descendant, ").exists)
+        XCTAssertFalse(element(containing: "↓ Descendant").exists)
         // Le résultat rejoint les tests précédents.
         XCTAssertFalse(element(containing: "Aucun test pour l").exists)
         // Et il se supprime d'un balayage.
