@@ -435,6 +435,20 @@ final class FormatTests: XCTestCase {
             usedBytes: 12_400_000_000, allowanceBytes: 50_000_000_000, remainingBytes: 37_600_000_000,
             fractionUsed: 0.248, cycleEnd: now)
         XCTAssertEqual(WidgetText.planRemaining(plan), "Reste 37,60\(space)Go")
+        // VoiceOver lit le bloc du jour en une phrase, sans flèches ni double point.
+        var snapshot = WidgetSnapshot.example
+        snapshot.updatedAt = earlier
+        XCTAssertEqual(
+            WidgetText.spokenToday(snapshot, now: now, calendar: calendar),
+            "Aujourd’hui : 1,24\(space)Go consommés. Débit descendant : 42,8\(space)Mb/s. "
+                + WidgetText.updated(earlier, now: now, calendar: calendar) + ".")
+        snapshot.updatedAt = yesterday
+        snapshot.downloadBps = nil
+        let spoken = WidgetText.spokenToday(snapshot, now: now, calendar: calendar)
+        XCTAssertTrue(spoken.hasPrefix("Le 20"), spoken)
+        XCTAssertTrue(spoken.contains("Débit descendant inconnu."), spoken)
+        XCTAssertFalse(spoken.contains(".."), spoken)
+        XCTAssertFalse(spoken.contains("↓"), spoken)
         var over = plan
         over.usedBytes = 51_000_000_000
         XCTAssertEqual(WidgetText.planRemaining(over), "Forfait dépassé")
