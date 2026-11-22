@@ -274,6 +274,7 @@ async fn the_optimisations_are_the_apps() {
         "256 Ko de pile",
         "de 2 à 64 Ko",
         "après 3 s",
+        "dort jusqu’à elle, sans se réveiller en boucle",
         "toutes les 5 s au tableau de bord, toutes les 10 s ailleurs",
         "au plus toutes les 10 s",
         "sous 20 % de batterie",
@@ -303,6 +304,7 @@ async fn the_optimisations_are_the_apps() {
         "MAX_CHUNK: usize = 64 * 1024",
         "MIN_CHUNK: usize = 2 * 1024",
         "CONNECT_ATTEMPT: Duration = Duration::from_secs(3)",
+        ".wait_timeout(finished, grace - silence)",
     ] {
         assert!(relay.contains(constant), "{constant}");
     }
