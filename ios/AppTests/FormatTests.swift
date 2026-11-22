@@ -691,8 +691,12 @@ final class FormatTests: XCTestCase {
     }
 
     func testTheRelayIsPolledOftenOnlyWhenWatched() {
-        XCTAssertEqual(AppModel.relayPollInterval(screenVisible: true), 1)
-        XCTAssertEqual(AppModel.relayPollInterval(screenVisible: false), 5)
+        XCTAssertEqual(AppModel.relayPollInterval(relayScreenVisible: true, dashboardVisible: false), 1)
+        XCTAssertEqual(AppModel.relayPollInterval(relayScreenVisible: true, dashboardVisible: true), 1)
+        XCTAssertEqual(AppModel.relayPollInterval(relayScreenVisible: false, dashboardVisible: true), 5)
+        XCTAssertEqual(
+            AppModel.relayPollInterval(relayScreenVisible: false, dashboardVisible: false), 10,
+            "ailleurs, au rythme de l'activité en direct")
     }
 
     func testAStoppedRelayIsReopenedWithoutHammering() {
