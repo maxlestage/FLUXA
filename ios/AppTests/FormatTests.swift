@@ -506,6 +506,23 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 2, "jamais moins de deux secondes")
     }
 
+    func testTheLatencyProbeTakesAPastedAddress() {
+        func endpoint(_ input: String) -> String? {
+            LatencyProbe.endpoint(from: input).map { "\($0.host):\($0.port)" }
+        }
+        XCTAssertEqual(endpoint("www.apple.com"), "www.apple.com:443")
+        XCTAssertEqual(endpoint("  https://www.apple.com/fr/?a=1  "), "www.apple.com:443")
+        XCTAssertEqual(endpoint("exemple.fr:8443"), "exemple.fr:8443")
+        XCTAssertEqual(endpoint("http://user@exemple.fr:80/page"), "exemple.fr:80")
+        XCTAssertEqual(endpoint("1.1.1.1"), "1.1.1.1:443")
+        XCTAssertEqual(endpoint("[2606:4700::1111]:853"), "2606:4700::1111:853")
+        XCTAssertEqual(endpoint("2606:4700::1111"), "2606:4700::1111:443", "IPv6 sans crochets")
+        // Rien d'utilisable : pas de sonde.
+        for input in ["", "   ", "www apple com", "exemple.fr:0", "exemple.fr:99999", "https://", ".exemple.fr", "[::1"] {
+            XCTAssertNil(LatencyProbe.endpoint(from: input), input)
+        }
+    }
+
     func testTheScreenStaysOnForTheRelayUnlessTheBatteryIsLow() {
         func keeps(open: Bool = true, wanted: Bool = true, background: Bool = false, level: Float = 0.8, charging: Bool = false)
             -> Bool

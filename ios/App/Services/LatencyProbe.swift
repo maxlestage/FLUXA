@@ -7,6 +7,44 @@ import Network
 /// d'une connexion TCP donne un aller-retour réseau comparable ; la première mesure
 /// compte aussi la résolution du nom.
 enum LatencyProbe {
+    /// L'hôte et le port à sonder, tirés de ce que l'utilisateur a saisi. Une adresse
+    /// collée telle quelle (« https://www.apple.com/ ») donne son hôte ; un port écrit
+    /// (« exemple.fr:8443 ») est gardé. `nil` si rien d'utilisable : pas de sonde alors,
+    /// plutôt qu'une sonde qui échoue et passerait pour une perte de paquets.
+    static func endpoint(from input: String) -> (host: String, port: UInt16)? {
+        var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let scheme = text.range(of: "://") {
+            text = String(text[scheme.upperBound...])
+        }
+        if let end = text.firstIndex(where: { "/?#".contains($0) }) {
+            text = String(text[..<end])
+        }
+        if let at = text.lastIndex(of: "@") {
+            text = String(text[text.index(after: at)...])
+        }
+        var host = text
+        var port: UInt16 = 443
+        if text.hasPrefix("[") {
+            guard let close = text.firstIndex(of: "]") else { return nil }
+            host = String(text[text.index(after: text.startIndex)..<close])
+            let rest = text[text.index(after: close)...]
+            if !rest.isEmpty {
+                guard rest.hasPrefix(":"), let value = UInt16(rest.dropFirst()), value > 0 else { return nil }
+                port = value
+            }
+            guard !host.isEmpty, host.allSatisfy({ $0.isHexDigit || $0 == ":" || $0 == "." }) else { return nil }
+            return (host, port)
+        }
+        if let colon = text.lastIndex(of: ":"), text.filter({ $0 == ":" }).count == 1 {
+            guard let value = UInt16(text[text.index(after: colon)...]), value > 0 else { return nil }
+            host = String(text[..<colon])
+            port = value
+        }
+        let allowed = host.allSatisfy { ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "." || $0 == ":") && !$0.isWhitespace }
+        guard !host.isEmpty, allowed, !host.hasPrefix("."), !host.hasPrefix("-") else { return nil }
+        return (host, port)
+    }
+
     /// Le temps de connexion en millisecondes, ou `nil` sans réponse dans le délai.
     static func measure(host: String, port: UInt16 = 443, timeout: TimeInterval = 3) async -> Double? {
         guard !host.isEmpty, let port = NWEndpoint.Port(rawValue: port) else { return nil }
