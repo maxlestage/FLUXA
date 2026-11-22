@@ -500,6 +500,21 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 2, "jamais moins de deux secondes")
     }
 
+    func testVoiceOverReadsTheRelayActivityInWords() {
+        func state(_ devices: Int, _ bps: Double?) -> RelayActivityAttributes.ContentState {
+            RelayActivityAttributes.ContentState(devices: devices, toDevicesBps: bps, cap: "", updatedAt: Date())
+        }
+        XCTAssertEqual(RelayActivityText.spokenTraffic(state(0, nil)), "Aucun appareil")
+        XCTAssertEqual(RelayActivityText.spokenTraffic(state(1, 3_000_000)), "1 appareil, 3,0\(space)Mb/s vers lui")
+        XCTAssertEqual(RelayActivityText.spokenTraffic(state(2, 3_400_000)), "2 appareils, 3,4\(space)Mb/s vers eux")
+        XCTAssertEqual(RelayActivityText.spokenTraffic(state(2, nil)), "2 appareils, débit vers eux non mesuré")
+        XCTAssertEqual(RelayActivityText.spokenRate(nil), "Débit vers les appareils non mesuré")
+        XCTAssertEqual(
+            RelayActivityText.spokenCap("↓ 25\(space)Mb/s · ↑ 10\(space)Mb/s"),
+            "Plafond : descendant 25\(space)Mb/s, montant 10\(space)Mb/s")
+        XCTAssertEqual(RelayActivityText.spokenCap("Sans plafond"), "Sans plafond")
+    }
+
     func testVoiceOverSummarisesTheLiveChart() {
         XCTAssertEqual(LiveChartText.summary([]), "Pas encore de mesure.")
         let samples = [

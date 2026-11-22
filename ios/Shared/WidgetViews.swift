@@ -264,9 +264,11 @@ struct RelayActivityBanner: View {
                 Text("\(RelayActivityText.devices(state.devices)) · ↓ \(RelayActivityText.rate(state.toDevicesBps))")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Theme.text)
+                    .accessibilityLabel(RelayActivityText.spokenTraffic(state))
                 Text("Plafond : \(state.cap)")
                     .font(.caption)
                     .foregroundStyle(Theme.secondary)
+                    .accessibilityLabel(RelayActivityText.spokenCap(state.cap))
                 HStack(spacing: 4) {
                     Text("Mis à jour")
                     Text(state.updatedAt, style: .relative)
@@ -326,6 +328,7 @@ enum RelayIsland {
             VStack(alignment: .trailing, spacing: 2) {
                 Text("↓ \(RelayActivityText.rate(state.toDevicesBps))")
                     .font(.subheadline.monospacedDigit())
+                    .accessibilityLabel(RelayActivityText.spokenRate(state.toDevicesBps))
                 Text(startedAt, style: .timer)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(Theme.secondary)
@@ -340,6 +343,7 @@ enum RelayIsland {
         var body: some View {
             HStack {
                 Text("Plafond : \(state.cap)")
+                    .accessibilityLabel(RelayActivityText.spokenCap(state.cap))
                 Spacer()
                 Text("Mis à jour")
                 Text(state.updatedAt, style: .relative)
