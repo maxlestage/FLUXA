@@ -275,6 +275,7 @@ async fn the_optimisations_are_the_apps() {
         "256 Ko de pile",
         "de 2 à 64 Ko",
         "après 3 s",
+        "relus au plus toutes les 5 s, et non à chaque connexion",
         "dort jusqu’à elle, sans se réveiller en boucle",
         "toutes les 5 s au tableau de bord, toutes les 10 s ailleurs",
         "au plus toutes les 10 s",
@@ -335,6 +336,8 @@ async fn the_optimisations_are_the_apps() {
         "self.pause.sleep(wait, &self.stop);",
         ".wait_timeout(guard, left)",
         "self.shared.pause.wake();",
+        "NETWORKS_TTL: Duration = Duration::from_secs(5)",
+        "self.networks.allows(peer)",
     ] {
         assert!(relay.contains(constant), "{constant}");
     }
