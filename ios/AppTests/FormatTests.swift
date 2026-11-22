@@ -728,6 +728,9 @@ final class FormatTests: XCTestCase {
         XCTAssertNil(RelayText.cleanName(" \n "))
         XCTAssertEqual(RelayText.cleanName(String(repeating: "a", count: 60))?.count, 40)
         XCTAssertEqual(RelayText.connections(2), "2 connexions")
+        XCTAssertEqual(RelayText.connections(0, idleSeconds: 20), "inactif", "moins d'une minute")
+        XCTAssertEqual(RelayText.connections(0, idleSeconds: 250), "inactif depuis 4\(space)min")
+        XCTAssertEqual(RelayText.connections(1, idleSeconds: 250), "1 connexion", "une connexion ouverte n'est pas inactive")
         XCTAssertTrue(AppModel.relayProblem(EADDRINUSE).contains("8888"))
     }
 
