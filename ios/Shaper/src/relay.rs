@@ -764,17 +764,17 @@ fn pipe(
 ) -> io::Result<()> {
     let mut to = to?;
     // Un seul tampon par sens, sur le tas ; la taille lue suit le plafond.
-    let mut buffer = vec![0u8; MAX_CHUNK];
+    let mut buffer = Buffer::new();
     let mut chunk = MAX_CHUNK;
     while !shared.stop.load(Ordering::Relaxed) {
-        let count = match from.read(&mut buffer[..chunk]) {
+        let count = match from.read(buffer.room(chunk)) {
             Ok(0) => break,
             Ok(count) => count,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error) => return Err(error),
         };
         chunk = chunk_size(shared.throttle(peer, direction, count));
-        to.write_all(&buffer[..count])?;
+        to.write_all(buffer.filled(count))?;
         if let Some(progress) = progress {
             progress.touch();
         }
@@ -788,6 +788,45 @@ fn pipe(
 /// les passages par le verrou des plafonds (des milliers par seconde en 5G avec 8 ko).
 const MAX_CHUNK: usize = 64 * 1024;
 const MIN_CHUNK: usize = 2 * 1024;
+
+/// Le tampon d'entrée d'un sens : il commence petit et ne grandit que si le trafic le
+/// remplit. Une connexion qui reste ouverte sans presque rien échanger (la plupart) garde
+/// 4 ko au lieu de 64 ko ; un téléchargement atteint 64 ko en quatre lectures pleines.
+struct Buffer {
+    bytes: Vec<u8>,
+}
+
+/// La taille de départ du tampon de chaque sens.
+const START_CHUNK: usize = 4 * 1024;
+
+impl Buffer {
+    fn new() -> Self {
+        Buffer {
+            bytes: vec![0u8; START_CHUNK],
+        }
+    }
+
+    /// La place offerte à la prochaine lecture : au plus `chunk`, au plus le tampon.
+    fn room(&mut self, chunk: usize) -> &mut [u8] {
+        let size = chunk.min(self.bytes.len());
+        &mut self.bytes[..size]
+    }
+
+    /// Les octets lus. Une lecture qui a rempli tout le tampon le fait doubler, jusqu'à
+    /// `MAX_CHUNK` ; une lecture bornée par le plafond ne le fait jamais grandir.
+    fn filled(&mut self, count: usize) -> &[u8] {
+        let length = self.bytes.len();
+        if count == length && length < MAX_CHUNK {
+            self.bytes.resize((length * 2).min(MAX_CHUNK), 0);
+        }
+        &self.bytes[..count]
+    }
+
+    #[cfg(test)]
+    fn capacity(&self) -> usize {
+        self.bytes.len()
+    }
+}
 
 /// La taille de lecture pour un plafond en octets par seconde (zéro : sans plafond) : un
 /// huitième de seconde de débit, pour que le trafic reste régulier même sous un plafond bas.
@@ -1342,6 +1381,34 @@ mod tests {
             thread::sleep(Duration::from_millis(20));
         }
         let _again = through_connect(&relay, target);
+    }
+
+    #[test]
+    fn a_quiet_connection_keeps_a_small_buffer() {
+        let mut buffer = Buffer::new();
+        assert_eq!(buffer.capacity(), 4 * 1024);
+        // Des échanges courts : le tampon ne grandit pas.
+        for _ in 0..100 {
+            assert_eq!(buffer.room(MAX_CHUNK).len(), START_CHUNK);
+            buffer.filled(600);
+        }
+        assert_eq!(buffer.capacity(), START_CHUNK);
+        // Sous un plafond qui borne les lectures, il ne grandit pas non plus.
+        buffer.room(MIN_CHUNK);
+        buffer.filled(MIN_CHUNK);
+        assert_eq!(buffer.capacity(), START_CHUNK);
+        // Des lectures pleines : il double jusqu'à 64 ko, en gardant ce qui a été lu.
+        let mut sizes = Vec::new();
+        for round in 0..6u8 {
+            let room = buffer.room(MAX_CHUNK);
+            let count = room.len();
+            room.fill(round);
+            let read = buffer.filled(count);
+            assert_eq!(read.len(), count);
+            assert!(read.iter().all(|byte| *byte == round));
+            sizes.push(buffer.capacity());
+        }
+        assert_eq!(sizes, [8, 16, 32, 64, 64, 64].map(|kilo| kilo * 1024));
     }
 
     #[test]
