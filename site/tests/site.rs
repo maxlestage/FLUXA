@@ -281,6 +281,7 @@ async fn the_optimisations_are_the_apps() {
         "ne se relisent que s’ils sont affichés",
         "laisse 100 ms de marge à iOS",
         "écartées sur leur nom brut, sans rien copier",
+        "dort d’un trait jusqu’à l’échéance, au lieu de se réveiller toutes les 100 ms",
         "part d’un tampon de 4 Ko, qui ne double, jusqu’à 64 Ko",
     ] {
         assert!(home.contains(fact), "l'optimisation ne dit plus : {fact}");
@@ -318,6 +319,9 @@ async fn the_optimisations_are_the_apps() {
         "START_CHUNK: usize = 4 * 1024",
         "count == length && length < MAX_CHUNK",
         "(length * 2).min(MAX_CHUNK)",
+        "self.pause.sleep(wait, &self.stop);",
+        ".wait_timeout(guard, left)",
+        "self.shared.pause.wake();",
     ] {
         assert!(relay.contains(constant), "{constant}");
     }
