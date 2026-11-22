@@ -327,6 +327,7 @@ private struct NetworkShare: View {
             Text(HistoryView.detail(usage))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(Theme.secondary)
+                .accessibilityLabel(Format.spoken(HistoryView.detail(usage)))
         }
         .accessibilityElement(children: .combine)
     }

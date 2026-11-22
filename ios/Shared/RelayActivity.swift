@@ -52,9 +52,6 @@ enum RelayActivityText {
     /// Le plafond, pour VoiceOver : les flèches et le point médian deviennent des mots.
     static func spokenCap(_ cap: String) -> String {
         guard cap.contains("↓") || cap.contains("↑") else { return cap }
-        return "Plafond : "
-            + cap.replacingOccurrences(of: "↓", with: "descendant")
-            .replacingOccurrences(of: "↑", with: "montant")
-            .replacingOccurrences(of: " · ", with: ", ")
+        return "Plafond : " + Format.spoken(cap)
     }
 }

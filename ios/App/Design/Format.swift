@@ -49,6 +49,14 @@ enum Format {
     }
 
     /// Un volume de données, en unités décimales : ko, Mo, Go.
+    /// Une mesure à flèches pour VoiceOver : « ↓ 25 Mb/s · ↑ 10 Mb/s » se lit
+    /// « descendant 25 Mb/s, montant 10 Mb/s » au lieu d'épeler les signes.
+    static func spoken(_ text: String) -> String {
+        text.replacingOccurrences(of: "↓", with: "descendant")
+            .replacingOccurrences(of: "↑", with: "montant")
+            .replacingOccurrences(of: " · ", with: ", ")
+    }
+
     static func bytes(_ value: UInt64) -> String {
         let bytes = Double(value)
         if bytes >= 1_000_000_000 {

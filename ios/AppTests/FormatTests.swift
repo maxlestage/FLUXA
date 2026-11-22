@@ -500,6 +500,15 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 2, "jamais moins de deux secondes")
     }
 
+    func testVoiceOverReadsArrowsAsWords() {
+        XCTAssertEqual(
+            Format.spoken("↓ 25\(space)Mb/s · ↑ 10\(space)Mb/s"), "descendant 25\(space)Mb/s, montant 10\(space)Mb/s")
+        XCTAssertEqual(
+            Format.spoken("↓ 3,2\(space)Mb/s vers les appareils · ↑ 0,4\(space)Mb/s reçus"),
+            "descendant 3,2\(space)Mb/s vers les appareils, montant 0,4\(space)Mb/s reçus")
+        XCTAssertEqual(Format.spoken("Sans plafond"), "Sans plafond")
+    }
+
     func testVoiceOverReadsTheRelayActivityInWords() {
         func state(_ devices: Int, _ bps: Double?) -> RelayActivityAttributes.ContentState {
             RelayActivityAttributes.ContentState(devices: devices, toDevicesBps: bps, cap: "", updatedAt: Date())
