@@ -279,6 +279,7 @@ async fn the_optimisations_are_the_apps() {
         "au plus toutes les 10 s",
         "sous 20 % de batterie",
         "ne se relisent que s’ils sont affichés",
+        "n’est recopiée chaque seconde que tableau de bord affiché",
         "laisse 100 ms de marge à iOS",
         "écartées sur leur nom brut, sans rien copier",
         "dort d’un trait jusqu’à l’échéance, au lieu de se réveiller toutes les 100 ms",
@@ -293,6 +294,7 @@ async fn the_optimisations_are_the_apps() {
     assert!(model.contains("level < 0.2"));
     assert!(model.contains("sampleTolerance: Duration = .milliseconds(100)"));
     assert!(model.contains("tolerance: Self.sampleTolerance"));
+    assert!(model.contains("if Self.followsLiveChart(dashboardVisible: dashboardVisible) {"));
     let counters = read("App/Services/InterfaceCounters.swift");
     assert!(
         counters.contains("guard let kind = classify(cName: interface.ifa_name) else { continue }")
