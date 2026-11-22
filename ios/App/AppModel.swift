@@ -389,6 +389,11 @@ final class AppModel {
         }
     }
 
+    func deleteSpeedTest(_ test: SpeedTestResult) {
+        engine.deleteSpeedTest(at: test.date)
+        speedTests = engine.speedTests
+    }
+
     func deleteDevice(_ device: Device) {
         perform { try engine.deleteDevice(id: device.id) }
         devices = engine.devices

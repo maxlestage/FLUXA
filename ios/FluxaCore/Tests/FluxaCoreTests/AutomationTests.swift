@@ -733,6 +733,24 @@ final class AutomationTests: XCTestCase {
         XCTAssertEqual(reopened.speedTests, bench.engine.speedTests)
     }
 
+    func testASpeedTestCanBeDeletedAndStaysDeleted() throws {
+        let url = temporaryFile()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let store = try SQLiteStore(url: url)
+        let bench = Bench(store: store)
+        for index in 0..<3 {
+            bench.engine.recordSpeedTest(speedTest(at: noon.addingTimeInterval(Double(index) * minute), mbps: Double(index)))
+        }
+        let middle = noon.addingTimeInterval(minute)
+        XCTAssertTrue(bench.engine.deleteSpeedTest(at: middle))
+        XCTAssertEqual(bench.engine.speedTests.map(\.downloadBps), [2_000_000, 0])
+        XCTAssertFalse(bench.engine.deleteSpeedTest(at: middle), "déjà supprimé")
+
+        // La base l'a oublié aussi.
+        let reopened = FluxaEngine(store: try SQLiteStore(url: url), calendar: calendar(), now: { noon })
+        XCTAssertEqual(reopened.speedTests, bench.engine.speedTests)
+    }
+
     // MARK: Mise en forme
 
     func testVolumesAndRangesAreFormattedInFrench() {

@@ -337,6 +337,18 @@ final class FluxaUITests: XCTestCase {
         XCTAssertFalse(element(containing: "Montant, —").exists)
         // Le résultat rejoint les tests précédents.
         XCTAssertFalse(element(containing: "Aucun test pour l").exists)
+        // Et il se supprime d'un balayage.
+        // Un essai relancé a pu en laisser un autre : on compte les lignes.
+        let rows = app.descendants(matching: .any).matching(identifier: "test-precedent")
+        let previous = rows.firstMatch
+        XCTAssertTrue(scroll(to: previous))
+        let before = rows.count
+        previous.swipeLeft()
+        let delete = app.buttons["Supprimer"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        delete.tap()
+        let removed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in rows.count == before - 1 }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [removed], timeout: 5), .completed, "le test n'a pas été supprimé")
     }
 
     // MARK: Automatisations
