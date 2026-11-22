@@ -113,7 +113,14 @@ jobs:
             -derivedDataPath build \
             -retry-tests-on-failure -test-iterations 2 \
             test 2>&1 | tee test.log \
-            | grep --line-buffered -E "error:|Test Case .* (passed|failed)|Executed [0-9]+ test|\*\* TEST"
+            | grep --line-buffered -E "error:|Test Case .* (passed|failed|started)|Executed [0-9]+ test|\*\* TEST|[Cc]rash|Restarting after|unexpected exit|Testing failed|Test runner"
+      - name: Keep the full test log when the tests fail
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log
+          path: ios/test.log
+          if-no-files-found: ignore
       - name: Take a screenshot of every screen
         if: always()
         working-directory: ios
