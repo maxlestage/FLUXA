@@ -280,6 +280,7 @@ async fn the_optimisations_are_the_apps() {
         "sous 20 % de batterie",
         "ne se relisent que s’ils sont affichés",
         "laisse 100 ms de marge à iOS",
+        "écartées sur leur nom brut, sans rien copier",
         "part d’un tampon de 4 Ko, qui ne double, jusqu’à 64 Ko",
     ] {
         assert!(home.contains(fact), "l'optimisation ne dit plus : {fact}");
@@ -291,6 +292,11 @@ async fn the_optimisations_are_the_apps() {
     assert!(model.contains("level < 0.2"));
     assert!(model.contains("sampleTolerance: Duration = .milliseconds(100)"));
     assert!(model.contains("tolerance: Self.sampleTolerance"));
+    let counters = read("App/Services/InterfaceCounters.swift");
+    assert!(
+        counters.contains("guard let kind = classify(cName: interface.ifa_name) else { continue }")
+    );
+    assert!(counters.contains("name: String(cString: interface.ifa_name)"));
     assert!(model.contains("relayScreenVisible ? 1 : (dashboardVisible ? 5 : 10)"));
     assert!(read("App/Features/HistoryView.swift").contains("visible ? revision() : nil"));
     assert!(
