@@ -713,6 +713,22 @@ final class SQLiteStoreTests: XCTestCase {
         XCTAssertGreaterThan(first, 3, "le premier enregistrement écrit aussi les préréglages et les réglages")
     }
 
+    func testTheWritesOfAMinuteAreCompiledOnce() throws {
+        let store = try SQLiteStore(url: url)
+        let bench = Bench(store: store).started()
+        bench.measure(seconds: 60, down: 20, up: 4)
+        bench.measure(seconds: 60, down: 20, up: 4)
+        let compiled = store.compiledStatements
+        XCTAssertGreaterThan(compiled, 0)
+        // Dix minutes de plus : les mêmes requêtes, réutilisées, aucune recompilée.
+        for _ in 0..<10 {
+            bench.measure(seconds: 60, down: 20, up: 4)
+        }
+        XCTAssertEqual(store.lastSaveChanges, 5)
+        XCTAssertEqual(store.compiledStatements, compiled)
+        XCTAssertEqual(try SQLiteStore(url: url).load()?.minutes.buckets.count, 12)
+    }
+
     func testTheCheckpointCostsOneRowPerMinute() throws {
         let store = try SQLiteStore(url: url)
         let clock = TestClock()
