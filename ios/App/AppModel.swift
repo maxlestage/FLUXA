@@ -295,7 +295,7 @@ final class AppModel {
             lowData: path.isConstrained,
             metered: path.isExpensive
         ))
-        if ticks % probeInterval == 1 {
+        if Self.shouldProbe(dashboardVisible: dashboardVisible, tick: ticks, interval: probeInterval) {
             probeLatency()
         }
     }
@@ -424,6 +424,22 @@ final class AppModel {
 
     /// Vrai tant que l'écran du relais est affiché : son état y est relevé chaque seconde.
     var relayScreenVisible = false
+
+    /// Vrai tant que le tableau de bord est affiché. La latence n'est montrée que là : la
+    /// sonde ne tourne que là, et sonde dès qu'il réapparaît.
+    var dashboardVisible = false {
+        didSet {
+            if dashboardVisible, !oldValue, sampling != nil {
+                probeLatency()
+            }
+        }
+    }
+
+    /// Une sonde ouvre une connexion et réveille la radio (Wi-Fi ou réseau mobile) : elle
+    /// ne part que tableau de bord affiché, à la cadence choisie selon les modes du système.
+    static func shouldProbe(dashboardVisible: Bool, tick: Int, interval: Int) -> Bool {
+        dashboardVisible && interval > 0 && tick % interval == 1
+    }
 
     /// Secondes entre deux relevés de l'état du relais : chaque seconde à l'écran du relais,
     /// toutes les 5 secondes sinon. Avec l'extension réseau, chaque relevé réveille un

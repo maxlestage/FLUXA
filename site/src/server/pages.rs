@@ -52,7 +52,7 @@ const STORE_ICON: &str = r#"<svg width="26" height="26" viewBox="0 0 24 24" fill
 /// Ce que montre la carte de partage, pour qui ne voit pas l'image.
 const SHARE_ALT: &str = "FLUXA pour iPhone : « Votre connexion, mesurée à la seconde. », à côté d’un tableau de bord qui affiche 42,8 Mb/s en débit descendant.";
 
-const DESCRIPTION: &str = "FLUXA mesure le débit, la latence et la consommation de votre iPhone, gère vos profils de débit et vous guide pour partager votre connexion. Sans compte, sans cloud.";
+const DESCRIPTION: &str = "FLUXA mesure le débit, la latence et la consommation de votre iPhone, gère vos profils de débit et vous guide pour partager votre connexion. Sobre en batterie et en données, sans compte, sans cloud.";
 
 // ---------- Morceaux communs ----------
 
@@ -191,7 +191,8 @@ fn hero() -> Element {
                         ul().class("hero__facts")
                             .child(li().text("Sans compte"))
                             .child(li().text("Sans cloud"))
-                            .child(li().text("Statut réel de chaque fonction")),
+                            .child(li().text("Statut réel de chaque fonction"))
+                            .child(li().child(a().href("#optimisation").text("Sobre en batterie et en données"))),
                     ),
             )
             .child(
@@ -215,7 +216,7 @@ fn hero() -> Element {
 fn cadence() -> Element {
     let rates = [
         ("1 s", "Débit instantané", "dn"),
-        ("5 s", "Latence et gigue", ""),
+        ("5 s", "Latence, tableau de bord affiché", ""),
         ("1 à 5 s", "Consommation", ""),
         ("1 min", "Historique", ""),
     ];
@@ -233,6 +234,87 @@ fn cadence() -> Element {
                 .child(p().class("cadence__note").text(
                     "Cadences visées quand l’app est au premier plan. iOS limite l’exécution en arrière-plan, et FLUXA ne prétend pas le contraire.",
                 )),
+        )
+}
+
+/// Ce que l'app fait pour ne rien gaspiller. Chaque chiffre est celui du code de l'app,
+/// et le test `the_optimisations_are_the_apps` les garde alignés.
+const OPTIMISATIONS: [(&str, &str, &str, &str); 8] = [
+    (
+        "o-radio",
+        "La radio se repose",
+        "La sonde de latence n’ouvre une connexion que tableau de bord affiché : toutes les 5 s, toutes les 15 s sur réseau mobile ou en économie d’énergie, toutes les 30 s en données réduites. Ailleurs dans l’app et en arrière-plan, aucune.",
+        "Aucune sonde hors du tableau de bord",
+    ),
+    (
+        "o-compteurs",
+        "Mesurer sans rien télécharger",
+        "Le débit et la consommation se lisent sur les compteurs réseau d’iOS, chaque seconde. Cette mesure n’envoie ni ne reçoit aucune donnée : seuls la sonde de latence et le test de débit, que vous lancez, en échangent.",
+        "Aucun octet pour mesurer le débit",
+    ),
+    (
+        "o-disque",
+        "Le stockage ménagé",
+        "L’historique s’enregistre une fois par minute dans une base SQLite en journal anticipé, sans attendre le disque à chaque sauvegarde. Seul ce qui a changé est réécrit.",
+        "Une écriture par minute",
+    ),
+    (
+        "o-widgets",
+        "Des widgets qui n’usent rien",
+        "Le relevé partagé avec les widgets n’est réécrit qu’au plus toutes les 5 minutes, ou quand son allure change. Les widgets se rafraîchissent au plus tous les quarts d’heure et disent l’heure du relevé.",
+        "5 min · 15 min",
+    ),
+    (
+        "o-rust",
+        "Un relais écrit en Rust",
+        "Au plus 192 connexions, des fils légers de 256 Ko de pile, des lectures taillées sur le plafond, de 2 à 64 Ko. Une adresse qui ne répond pas cède la place après 3 s.",
+        "Rust · ABI C",
+    ),
+    (
+        "o-releves",
+        "Relevés à la demande",
+        "L’état du relais est relevé chaque seconde quand son écran est affiché, toutes les 5 s sinon. L’activité en direct se met à jour au plus toutes les 10 s.",
+        "1 s à l’écran, 5 s ailleurs",
+    ),
+    (
+        "o-batterie",
+        "La batterie d’abord",
+        "Quand le relais tourne dans l’app, l’écran n’est plus gardé allumé sous 20 % de batterie hors charge. Le réseau local reste en direct, sans détour par le relais.",
+        "Seuil de 20 %",
+    ),
+    (
+        "o-modes",
+        "Les réglages d’iOS respectés",
+        "Économie d’énergie et données réduites ralentissent la sonde. Sur un réseau facturé à l’usage, le test de débit demande confirmation et annonce le volume qu’il peut consommer.",
+        "Économie d’énergie · données réduites",
+    ),
+];
+
+fn optimisation() -> Element {
+    section()
+        .class("section section--alt")
+        .id("optimisation")
+        .attr("aria-labelledby", "h-optimisation")
+        .child(
+            div()
+                .class("wrap")
+                .child(section_head(
+                    "Optimisation",
+                    "h-optimisation",
+                    "Conçue pour ne rien gaspiller",
+                    Some(
+                        "FLUXA mesure sans arrêt. Elle a été pensée pour le faire sans peser sur la batterie, les données ni le stockage de l’iPhone. Chaque point ci-dessous est dans l’app, vérifié par ses tests.",
+                    ),
+                ))
+                .child(ul().class("feats").children(OPTIMISATIONS.iter().map(
+                    |(id, title, text, meta)| {
+                        li().class("feat opt")
+                            .id(*id)
+                            .child(div().class("feat__head").child(h3().text(*title)))
+                            .child(p().text(*text))
+                            .child(p().class("feat__meta").text(*meta))
+                    },
+                ))),
         )
 }
 
@@ -883,6 +965,7 @@ pub fn home(ctx: &Ctx) -> Page {
             .id("contenu")
             .child(hero())
             .child(cadence())
+            .child(optimisation())
             .child(features())
             .child(profiles_section())
             .child(transparency())
@@ -921,6 +1004,7 @@ const FOOTER: [(&str, &[(&str, &str)]); 6] = [
     (
         "Profils et limites",
         &[
+            ("#optimisation", "Optimisation"),
             ("#profils", "Les sept profils"),
             ("#f-limiteur", "Limiteur de débit"),
             ("#lab", "Configuré ou appliqué"),
@@ -1195,7 +1279,7 @@ pub fn privacy(ctx: &Ctx) -> Page {
             Block::Title("reseau", "Ce que l’app échange sur le réseau"),
             Block::Text("Pour mesurer, l’app fait deux échanges, et seulement ceux-là :"),
             Block::List(&[
-                "<strong>La sonde de latence.</strong> Quand l’app est ouverte, elle ouvre une connexion vers un hôte toutes les cinq secondes (toutes les 15 secondes sur réseau mobile ou en mode économie d’énergie, toutes les 30 en mode données réduites) (www.apple.com par défaut, modifiable dans les réglages) et en mesure le délai. Aucune donnée n’y est envoyée ; l’hôte voit votre adresse IP, comme tout site que vous visitez.",
+                "<strong>La sonde de latence.</strong> Quand le tableau de bord de l’app est affiché, elle ouvre une connexion vers un hôte toutes les cinq secondes (toutes les 15 secondes sur réseau mobile ou en mode économie d’énergie, toutes les 30 en mode données réduites) (www.apple.com par défaut, modifiable dans les réglages) et en mesure le délai. Ailleurs dans l’app et en arrière-plan, aucune sonde ne part. Aucune donnée n’y est envoyée ; l’hôte voit votre adresse IP, comme tout site que vous visitez.",
                 "<strong>Le test de débit.</strong> Il ne part que lorsque vous le lancez. Il télécharge et envoie des données de test sans contenu, avec un serveur de test (speed.cloudflare.com par défaut, modifiable dans les réglages), qui voit votre adresse IP.",
             ]),
             Block::Text("Les mesures qui en résultent restent sur l’iPhone."),

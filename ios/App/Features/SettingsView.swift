@@ -44,7 +44,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Latence")
                 } footer: {
-                    Text("Toutes les cinq secondes, FLUXA ouvre une connexion vers cet hôte et en mesure le délai ; toutes les 15 secondes sur réseau mobile ou en mode économie d’énergie, toutes les 30 en mode données réduites. Avec le test de débit, que vous lancez vous-même, ce sont les seuls échanges de l’app pour son propre compte.")
+                    Text("Tableau de bord affiché, FLUXA ouvre toutes les cinq secondes une connexion vers cet hôte et en mesure le délai ; toutes les 15 secondes sur réseau mobile ou en mode économie d’énergie, toutes les 30 en mode données réduites. Ailleurs dans l’app et en arrière-plan, aucune sonde ne part : la radio peut se reposer. Avec le test de débit, que vous lancez vous-même, ce sont les seuls échanges de l’app pour son propre compte.")
                 }
 
                 Section {
@@ -63,7 +63,7 @@ struct SettingsView: View {
 
                 Section {
                     ValueRow("Débit", "chaque seconde")
-                    ValueRow("Latence et gigue", Self.probeCadence(model.probeInterval))
+                    ValueRow("Latence et gigue", Self.probeCadence(model.probeInterval) + ", tableau de bord affiché")
                     ValueRow("Historique", "chaque minute")
                 } header: {
                     Text("Cadences")
