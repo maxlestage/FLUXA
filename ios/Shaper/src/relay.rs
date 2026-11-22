@@ -817,15 +817,66 @@ fn split_host_port(authority: &str, default_port: u16) -> Option<(String, u16)> 
     }
 }
 
+/// Le temps total accordé à l'ouverture d'une connexion vers un site.
+const CONNECT_BUDGET: Duration = Duration::from_secs(10);
+/// Le temps accordé à une adresse quand d'autres attendent derrière elle.
+const CONNECT_ATTEMPT: Duration = Duration::from_secs(3);
+
 fn connect(host: &str, port: u16) -> io::Result<TcpStream> {
+    let addresses = interleave((host, port).to_socket_addrs()?.collect());
+    connect_any(&addresses, CONNECT_BUDGET)
+}
+
+/// Essaie les adresses dans l'ordre, sans dépasser `budget` en tout. Une adresse qui ne
+/// répond pas (IPv6 annoncé mais non acheminé, par exemple) ne bloque pas les suivantes
+/// plus de `CONNECT_ATTEMPT` ; la dernière reçoit tout le temps restant.
+fn connect_any(addresses: &[SocketAddr], budget: Duration) -> io::Result<TcpStream> {
+    let deadline = Instant::now() + budget;
     let mut last = io::Error::from(io::ErrorKind::NotFound);
-    for address in (host, port).to_socket_addrs()? {
-        match TcpStream::connect_timeout(&address, Duration::from_secs(10)) {
+    for (index, address) in addresses.iter().enumerate() {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(io::Error::from(io::ErrorKind::TimedOut));
+        }
+        let timeout = attempt_timeout(remaining, addresses.len() - index);
+        match TcpStream::connect_timeout(address, timeout) {
             Ok(stream) => return Ok(stream),
             Err(error) => last = error,
         }
     }
     Err(last)
+}
+
+/// Le délai d'une tentative : court s'il reste d'autres adresses, tout le reste sinon.
+fn attempt_timeout(remaining: Duration, addresses_left: usize) -> Duration {
+    if addresses_left > 1 {
+        remaining.min(CONNECT_ATTEMPT)
+    } else {
+        remaining
+    }
+}
+
+/// Alterne les familles d'adresses (v6, v4, v6, v4…) en gardant l'ordre du système dans
+/// chacune et sa première famille en tête : si l'une ne passe pas, l'autre est essayée
+/// dès la deuxième tentative.
+fn interleave(addresses: Vec<SocketAddr>) -> Vec<SocketAddr> {
+    let Some(first) = addresses.first() else {
+        return addresses;
+    };
+    let first_is_v6 = first.is_ipv6();
+    let (mut lead, mut other): (Vec<_>, Vec<_>) = addresses
+        .into_iter()
+        .partition(|address| address.is_ipv6() == first_is_v6);
+    let mut ordered = Vec::with_capacity(lead.len() + other.len());
+    lead.reverse();
+    other.reverse();
+    loop {
+        match (lead.pop(), other.pop()) {
+            (None, None) => break,
+            (a, b) => ordered.extend(a.into_iter().chain(b)),
+        }
+    }
+    ordered
 }
 
 /// Si l'adresse appartient à l'un des réseaux (adresse, masque).
@@ -887,6 +938,47 @@ fn bridge_networks() -> Vec<(Ipv4Addr, Ipv4Addr)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_address_families_alternate() {
+        let v6 = |n: u16| SocketAddr::new("2001:db8::1".parse().unwrap(), n);
+        let v4 = |n: u16| SocketAddr::new("192.0.2.1".parse().unwrap(), n);
+        assert_eq!(
+            interleave(vec![v6(1), v6(2), v6(3), v4(4)]),
+            vec![v6(1), v4(4), v6(2), v6(3)]
+        );
+        assert_eq!(
+            interleave(vec![v4(1), v4(2), v6(3), v6(4)]),
+            vec![v4(1), v6(3), v4(2), v6(4)]
+        );
+        assert_eq!(interleave(vec![v4(1), v4(2)]), vec![v4(1), v4(2)]);
+        assert!(interleave(Vec::new()).is_empty());
+    }
+
+    #[test]
+    fn a_silent_address_does_not_take_the_whole_budget() {
+        let ten = Duration::from_secs(10);
+        assert_eq!(attempt_timeout(ten, 3), CONNECT_ATTEMPT);
+        assert_eq!(attempt_timeout(ten, 1), ten);
+        let one = Duration::from_secs(1);
+        assert_eq!(attempt_timeout(one, 2), one);
+    }
+
+    #[test]
+    fn the_next_address_is_tried_when_one_refuses() {
+        // Un port fermé, puis un port qui écoute : la connexion passe par le second.
+        let closed = TcpListener::bind("127.0.0.1:0").unwrap();
+        let closed_address = closed.local_addr().unwrap();
+        drop(closed);
+        let open = TcpListener::bind("127.0.0.1:0").unwrap();
+        let stream = connect_any(
+            &[closed_address, open.local_addr().unwrap()],
+            CONNECT_BUDGET,
+        )
+        .unwrap();
+        assert_eq!(stream.peer_addr().unwrap(), open.local_addr().unwrap());
+        assert!(connect_any(&[], CONNECT_BUDGET).is_err());
+    }
     use std::io::BufRead;
 
     /// Un petit serveur qui envoie `size` octets à chaque connexion, après avoir lu une
