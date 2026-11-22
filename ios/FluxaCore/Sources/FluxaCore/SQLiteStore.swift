@@ -44,6 +44,8 @@ public final class SQLiteStore: EngineStore {
     private var eventSequence: [Int64] = []
     /// Le nombre de lignes écrites ou supprimées par le dernier `save`.
     private(set) var lastSaveChanges = 0
+    /// Le nombre de requêtes compilées depuis l'ouverture.
+    var compiledStatements: Int { database.compiledStatements }
 
     /// Ouvre la base, ou la crée avec son schéma. Lève `FluxaError.store` si le fichier
     /// ne peut pas être ouvert ou si son schéma est plus récent que cette version.
@@ -458,14 +460,14 @@ public final class SQLiteStore: EngineStore {
         guard old != new else { return }
         let removed = old.keys.filter { new[$0] == nil }
         if !removed.isEmpty {
-            let statement = try database.prepare(delete)
+            let statement = try database.statement(delete)
             for item in removed {
                 try statement.run(key(item))
             }
         }
         let changed = new.filter { old[$0.key] != $0.value }
         if !changed.isEmpty {
-            let statement = try database.prepare(upsert)
+            let statement = try database.statement(upsert)
             for (item, value) in changed {
                 try statement.run(try row(item, value))
             }
@@ -494,7 +496,7 @@ public final class SQLiteStore: EngineStore {
                 try database.execute("DELETE FROM \(table)")
             }
         } else if dropped > 0 {
-            let statement = try database.prepare("DELETE FROM \(table) WHERE seq = ?")
+            let statement = try database.statement("DELETE FROM \(table) WHERE seq = ?")
             for seq in sequence.prefix(dropped) {
                 try statement.run([.integer(seq)])
             }
@@ -502,7 +504,7 @@ public final class SQLiteStore: EngineStore {
         var remaining = Array(sequence.dropFirst(dropped))
         let added = new.dropFirst(old.count - dropped)
         if !added.isEmpty {
-            let statement = try database.prepare(insert)
+            let statement = try database.statement(insert)
             var next = (sequence.last ?? 0) + 1
             for entry in added {
                 try statement.run(try row(next, entry))
