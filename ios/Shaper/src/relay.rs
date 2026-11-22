@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -643,11 +643,53 @@ impl Prefixed {
 /// de son dernier envoi, en millisecondes depuis l'ouverture.
 struct Progress {
     opened: Instant,
-    finished: AtomicBool,
+    finished: Mutex<bool>,
+    signal: Condvar,
     last_download_ms: AtomicU64,
 }
 
 impl Progress {
+    fn new() -> Self {
+        Progress {
+            opened: Instant::now(),
+            finished: Mutex::new(false),
+            signal: Condvar::new(),
+            last_download_ms: AtomicU64::new(0),
+        }
+    }
+
+    /// Le sens descendant est fini : le sens montant, qui l'attend peut-être, est réveillé.
+    fn finish(&self) {
+        *lock(&self.finished) = true;
+        self.signal.notify_all();
+    }
+
+    /// Attend la fin du sens descendant, tant que le serveur ne se tait pas plus de
+    /// `grace`. Rend `true` si le serveur s'est tu trop longtemps, et le nombre de réveils.
+    ///
+    /// Sans attente active : le fil dort jusqu'à la fin du sens descendant (l'arrêt du
+    /// relais y mène aussi, en coupant les sockets) ou jusqu'à l'échéance du silence, au
+    /// lieu de se réveiller dix fois par seconde pendant tout le délai de grâce.
+    fn wait_for_download(&self, grace: Duration, stop: &AtomicBool) -> (bool, u32) {
+        let mut wakeups = 0;
+        let mut finished = lock(&self.finished);
+        loop {
+            if *finished || stop.load(Ordering::Relaxed) {
+                return (false, wakeups);
+            }
+            let silence = self.silence();
+            if silence >= grace {
+                return (true, wakeups);
+            }
+            finished = self
+                .signal
+                .wait_timeout(finished, grace - silence)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+            wakeups += 1;
+        }
+    }
+
     fn touch(&self) {
         self.last_download_ms
             .store(self.opened.elapsed().as_millis() as u64, Ordering::Relaxed);
@@ -669,11 +711,7 @@ fn tunnel(
     client.set_read_timeout(None)?;
     let _ = upstream.set_nodelay(true);
     let upstream_id = shared.register(&upstream);
-    let progress = Arc::new(Progress {
-        opened: Instant::now(),
-        finished: AtomicBool::new(false),
-        last_download_ms: AtomicU64::new(0),
-    });
+    let progress = Arc::new(Progress::new());
 
     let sending = Arc::clone(shared);
     let watching = Arc::clone(&progress);
@@ -695,14 +733,8 @@ fn tunnel(
             // muet trop longtemps ne garde pas la connexion, ni sa place, ni ses fils.
             let _ = to_server.shutdown(Shutdown::Write);
             let grace = *lock(&sending.close_grace);
-            while !watching.finished.load(Ordering::Relaxed)
-                && !sending.stop.load(Ordering::Relaxed)
-            {
-                if watching.silence() >= grace {
-                    let _ = to_server.shutdown(Shutdown::Both);
-                    break;
-                }
-                thread::sleep(grace.min(Duration::from_millis(100)));
+            if watching.wait_for_download(grace, &sending.stop).0 {
+                let _ = to_server.shutdown(Shutdown::Both);
             }
         })?;
 
@@ -714,7 +746,7 @@ fn tunnel(
         Direction::Download,
         Some(&progress),
     );
-    progress.finished.store(true, Ordering::Relaxed);
+    progress.finish();
     let _ = client.shutdown(Shutdown::Both);
     let _ = upstream.shutdown(Shutdown::Both);
     let _ = uploader.join();
@@ -938,6 +970,43 @@ fn bridge_networks() -> Vec<(Ipv4Addr, Ipv4Addr)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_half_closed_tunnel_waits_without_polling() {
+        let stop = AtomicBool::new(false);
+        // Un serveur muet : une seule échéance, au bout du délai, et non dix réveils par seconde.
+        let silent = Progress::new();
+        let started = Instant::now();
+        let (timed_out, wakeups) = silent.wait_for_download(Duration::from_millis(300), &stop);
+        assert!(timed_out);
+        assert!(started.elapsed() >= Duration::from_millis(300));
+        assert!(wakeups <= 2, "{wakeups} réveils");
+
+        // La fin du sens descendant réveille aussitôt le sens montant.
+        let progress = Arc::new(Progress::new());
+        let finishing = Arc::clone(&progress);
+        let finisher = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(50));
+            finishing.finish();
+        });
+        let started = Instant::now();
+        let (timed_out, wakeups) = progress.wait_for_download(Duration::from_secs(15), &stop);
+        finisher.join().unwrap();
+        assert!(!timed_out);
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
+        assert!(wakeups <= 2, "{wakeups} réveils");
+
+        // Un relais arrêté n'attend pas.
+        stop.store(true, Ordering::Relaxed);
+        assert_eq!(
+            Progress::new().wait_for_download(Duration::from_secs(15), &stop),
+            (false, 0)
+        );
+    }
 
     #[test]
     fn the_address_families_alternate() {
