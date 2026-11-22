@@ -50,7 +50,7 @@ jobs:
   app:
     name: App (iOS simulator)
     runs-on: xcode-27
-    timeout-minutes: 90
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4
       - name: Use the newest Xcode
@@ -102,18 +102,31 @@ jobs:
           echo "DEVICE=$device" >> "$GITHUB_ENV"
       - name: Test the app in the simulator
         working-directory: ios
-        timeout-minutes: 45
+        timeout-minutes: 65
         run: |
           set -o pipefail
           # Un test échoué est relancé une fois : le simulateur rate parfois le lancement
           # de l'app (« does not have a process ID »). Un vrai défaut échoue deux fois.
-          xcodebuild \
-            -project Fluxa.xcodeproj -scheme Fluxa -configuration Debug \
-            -destination "platform=iOS Simulator,id=$DEVICE" \
-            -derivedDataPath build \
-            -retry-tests-on-failure -test-iterations 2 \
-            test 2>&1 | tee test.log \
-            | grep --line-buffered -E "error:|Test Case .* (passed|failed|started)|Executed [0-9]+ test|\*\* TEST|[Cc]rash|Restarting after|unexpected exit|Testing failed|Test runner"
+          run_tests() {
+            xcodebuild \
+              -project Fluxa.xcodeproj -scheme Fluxa -configuration Debug \
+              -destination "platform=iOS Simulator,id=$DEVICE" \
+              -derivedDataPath build \
+              -retry-tests-on-failure -test-iterations 2 \
+              "$1" 2>&1 | tee -a test.log \
+              | grep --line-buffered -E "error:|Test Case .* (passed|failed|started)|Executed [0-9]+ test|\*\* TEST|[Cc]rash|Restarting after|unexpected exit|Testing failed|Test runner"
+          }
+          if run_tests test; then exit 0; fi
+          # Le lanceur de tests d'interface de la machine de CI plante parfois de lui-même
+          # (« The test runner crashed »). Ce n'est pas un test qui échoue : les tests sont
+          # refaits une fois, sans recompiler. Un test qui échoue reste un échec.
+          if grep -q "The test runner crashed\|Test runner never began executing tests" test.log \
+            && ! grep -qE "^Test Case .* failed \(" test.log; then
+            echo "::warning::Le lanceur de tests a planté de lui-même : les tests sont refaits une fois."
+            run_tests test-without-building
+          else
+            exit 1
+          fi
       - name: Keep the full test log when the tests fail
         if: failure()
         uses: actions/upload-artifact@v4
