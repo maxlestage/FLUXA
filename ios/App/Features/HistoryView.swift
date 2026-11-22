@@ -9,6 +9,8 @@ import UniformTypeIdentifiers
 struct HistoryView: View {
     @Environment(AppModel.self) private var model
     @State private var period = Period.hour
+    /// Affiché ou non : caché derrière un autre onglet, l'écran ne se relit pas chaque minute.
+    @State private var visible = false
 
     enum Period: String, CaseIterable, Identifiable {
         case hour, day, month
@@ -49,8 +51,9 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        // L'écran se relit quand l'historique change.
-        let _ = model.historyRevision
+        // L'écran se relit quand l'historique change, seulement s'il est affiché ; il se
+        // relit en réapparaissant.
+        let _ = Self.watchedRevision(model.historyRevision, visible: visible)
         let now = Date()
         let start = now.addingTimeInterval(-period.interval)
         let aggregates = model.history(from: start, to: now, step: period.step)
@@ -173,6 +176,8 @@ struct HistoryView: View {
             }
             .background(Theme.background)
             .navigationTitle("Historique")
+            .onAppear { visible = true }
+            .onDisappear { visible = false }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     ShareLink(
@@ -198,6 +203,12 @@ struct HistoryView: View {
         }
         let sign = rounded > 0 ? "+" : "−"
         return "\(sign)\(Format.number(abs(rounded), digits: 0))\u{00A0}% de volume"
+    }
+
+    /// La révision que l'écran suit : la vraie s'il est affiché, aucune sinon. Lire la
+    /// révision abonne l'écran à ses changements ; ne pas la lire l'en désabonne.
+    static func watchedRevision(_ revision: @autoclosure () -> Int, visible: Bool) -> Int? {
+        visible ? revision() : nil
     }
 
     static func previousDetail(_ comparison: UsageComparison) -> String {
