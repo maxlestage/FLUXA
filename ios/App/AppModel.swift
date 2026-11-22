@@ -78,6 +78,9 @@ final class AppModel {
         didSet { UserDefaults.standard.set(relayEnabled, forKey: Self.relayKey) }
     }
 
+    /// L'écran devrait rester allumé pour le relais, mais la batterie est trop faible.
+    private(set) var screenOnPausedForBattery = false
+
     /// L'écran reste allumé tant que le relais est ouvert : iOS suspend l'app sinon.
     var keepsScreenOnForRelay: Bool {
         didSet {
@@ -140,6 +143,8 @@ final class AppModel {
             ?? SpeedTestRunner.defaultServer
         relayEnabled = UserDefaults.standard.bool(forKey: Self.relayKey)
         keepsScreenOnForRelay = UserDefaults.standard.object(forKey: Self.keepsScreenOnKey) as? Bool ?? true
+        // Le niveau de batterie décide si l'écran reste allumé pour le relais.
+        UIDevice.current.isBatteryMonitoringEnabled = true
         relayDeviceProfiles = UserDefaults.standard.dictionary(forKey: Self.relayDeviceProfilesKey) as? [String: String] ?? [:]
         relayDeviceNames = UserDefaults.standard.dictionary(forKey: Self.relayDeviceNamesKey) as? [String: String] ?? [:]
         showsRelayActivity = UserDefaults.standard.object(forKey: Self.relayActivityKey) as? Bool ?? true
@@ -278,6 +283,9 @@ final class AppModel {
         ticks += 1
         if ticks % 60 == 0 {
             historyRevision += 1
+            if relayStatus != nil {
+                updateIdleTimer()
+            }
         }
         if ticks % 30 == 0 {
             widgets.publish(widgetSnapshot())
@@ -773,9 +781,31 @@ final class AppModel {
     }
 
     private func updateIdleTimer() {
-        // L'extension réseau tient le relais en arrière-plan : l'écran peut s'éteindre.
-        UIApplication.shared.isIdleTimerDisabled =
-            relayStatus != nil && keepsScreenOnForRelay && !relayHost.keepsRunningInBackground
+        let device = UIDevice.current
+        let charging = device.batteryState == .charging || device.batteryState == .full
+        UIApplication.shared.isIdleTimerDisabled = Self.keepsScreenOn(
+            relayOpen: relayStatus != nil, wanted: keepsScreenOnForRelay,
+            relayInBackground: relayHost.keepsRunningInBackground,
+            batteryLevel: device.batteryLevel, charging: charging)
+        let paused = relayStatus != nil && keepsScreenOnForRelay && !relayHost.keepsRunningInBackground
+            && Self.batteryIsLow(level: device.batteryLevel, charging: charging)
+        if paused != screenOnPausedForBattery {
+            screenOnPausedForBattery = paused
+        }
+    }
+
+    /// L'écran reste allumé pour le relais quand il tourne dans l'app (l'extension réseau
+    /// le tient sinon en arrière-plan), sauf batterie faible hors charge : l'iPhone peut
+    /// alors se mettre en veille, et le relais s'arrête avec l'app.
+    static func keepsScreenOn(
+        relayOpen: Bool, wanted: Bool, relayInBackground: Bool, batteryLevel: Float, charging: Bool
+    ) -> Bool {
+        relayOpen && wanted && !relayInBackground && !batteryIsLow(level: batteryLevel, charging: charging)
+    }
+
+    /// Sous 20 %, hors charge. Un niveau inconnu (-1, simulateur) n'est pas faible.
+    static func batteryIsLow(level: Float, charging: Bool) -> Bool {
+        !charging && level >= 0 && level < 0.2
     }
 
     /// Le message d'erreur d'une limite invalide, ou `nil` si elle est correcte.
