@@ -150,6 +150,56 @@ struct Shared {
     state: Mutex<State>,
     sockets: Mutex<HashMap<u64, TcpStream>>,
     next_socket: AtomicU64,
+    /// Où dorment les fils qu'un plafond fait attendre ; l'arrêt les réveille.
+    pause: Pause,
+}
+
+/// L'attente qu'impose un plafond : d'un seul sommeil jusqu'à l'échéance, plutôt que par
+/// tranches de 100 ms pour guetter l'arrêt. L'arrêt du relais réveille aussitôt les fils.
+struct Pause {
+    lock: Mutex<()>,
+    signal: Condvar,
+}
+
+impl Pause {
+    fn new() -> Self {
+        Pause {
+            lock: Mutex::new(()),
+            signal: Condvar::new(),
+        }
+    }
+
+    /// Dort `wait`, ou moins si l'arrêt est demandé. Rend le nombre de réveils.
+    fn sleep(&self, wait: Duration, stop: &AtomicBool) -> u32 {
+        if wait.is_zero() {
+            return 0;
+        }
+        let deadline = Instant::now() + wait;
+        let mut wakeups = 0;
+        let mut guard = lock(&self.lock);
+        loop {
+            if stop.load(Ordering::Relaxed) {
+                return wakeups;
+            }
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return wakeups;
+            }
+            guard = self
+                .signal
+                .wait_timeout(guard, left)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+            wakeups += 1;
+        }
+    }
+
+    /// Réveille les fils endormis : à appeler après avoir demandé l'arrêt. Le verrou est
+    /// pris pour qu'un fil qui s'apprête à dormir voie l'arrêt plutôt que de le manquer.
+    fn wake(&self) {
+        let _guard = lock(&self.lock);
+        self.signal.notify_all();
+    }
 }
 
 /// Un verrou empoisonné par une panique ailleurs reste utilisable : l'état est simple.
@@ -208,15 +258,8 @@ impl Shared {
                 lowest_rate(global_rate, device_rate),
             )
         };
-        // L'attente se fait hors du verrou, par tranches, pour s'arrêter vite au besoin.
-        let deadline = Instant::now() + wait;
-        while !self.stop.load(Ordering::Relaxed) {
-            let left = deadline.saturating_duration_since(Instant::now());
-            if left.is_zero() {
-                break;
-            }
-            thread::sleep(left.min(Duration::from_millis(100)));
-        }
+        // L'attente se fait hors du verrou des plafonds ; sans plafond, aucune.
+        self.pause.sleep(wait, &self.stop);
         rate
     }
 
@@ -281,6 +324,7 @@ impl Relay {
             }),
             sockets: Mutex::new(HashMap::new()),
             next_socket: AtomicU64::new(1),
+            pause: Pause::new(),
         });
         let accepting = Arc::clone(&shared);
         let accept = thread::Builder::new()
@@ -369,6 +413,7 @@ impl Relay {
     /// Arrête le relais et coupe les connexions en cours.
     pub fn stop(&mut self) {
         self.shared.stop.store(true, Ordering::Relaxed);
+        self.shared.pause.wake();
         for socket in lock(&self.shared.sockets).values() {
             let _ = socket.shutdown(Shutdown::Both);
         }
@@ -1045,6 +1090,34 @@ mod tests {
             Progress::new().wait_for_download(Duration::from_secs(15), &stop),
             (false, 0)
         );
+    }
+
+    #[test]
+    fn a_capped_wait_sleeps_in_one_go() {
+        let stop = AtomicBool::new(false);
+        let pause = Pause::new();
+        // Sans plafond, aucune attente.
+        assert_eq!(pause.sleep(Duration::ZERO, &stop), 0);
+        // 250 ms d'attente : un réveil, à l'échéance, et non trois tranches de 100 ms.
+        let started = Instant::now();
+        let wakeups = pause.sleep(Duration::from_millis(250), &stop);
+        assert!(started.elapsed() >= Duration::from_millis(250));
+        assert!(wakeups <= 2, "{wakeups} réveils");
+
+        // L'arrêt réveille aussitôt un fil qui attend.
+        let pause = Arc::new(Pause::new());
+        let stop = Arc::new(AtomicBool::new(false));
+        let (waiting, stopping) = (Arc::clone(&pause), Arc::clone(&stop));
+        let sleeper = thread::spawn(move || {
+            let started = Instant::now();
+            waiting.sleep(Duration::from_secs(15), &stopping);
+            started.elapsed()
+        });
+        thread::sleep(Duration::from_millis(50));
+        stop.store(true, Ordering::Relaxed);
+        pause.wake();
+        let slept = sleeper.join().unwrap();
+        assert!(slept < Duration::from_secs(2), "{slept:?}");
     }
 
     #[test]
