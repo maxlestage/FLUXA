@@ -33,6 +33,14 @@ struct SettingsView: View {
                             .autocorrectionDisabled()
                             .keyboardType(.URL)
                     }
+                    if !model.latencyHost.trimmingCharacters(in: .whitespaces).isEmpty,
+                        LatencyProbe.endpoint(from: model.latencyHost) == nil
+                    {
+                        Text("Adresse non reconnue : saisissez un nom d’hôte, par exemple www.apple.com. Aucune sonde n’est envoyée en attendant.")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.reserved)
+                            .accessibilityIdentifier("hote-invalide")
+                    }
                 } header: {
                     Text("Latence")
                 } footer: {

@@ -327,11 +327,11 @@ final class AppModel {
 
     private func probeLatency() {
         // Sans hôte, pas de sonde : une absence de réglage n'est pas une perte de paquets.
-        let host = latencyHost.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !probing, path.isOnline, !host.isEmpty else { return }
+        // Une saisie illisible non plus : elle échouerait à chaque fois.
+        guard !probing, path.isOnline, let endpoint = LatencyProbe.endpoint(from: latencyHost) else { return }
         probing = true
         Task { [weak self] in
-            let milliseconds = await LatencyProbe.measure(host: host)
+            let milliseconds = await LatencyProbe.measure(host: endpoint.host, port: endpoint.port)
             guard let self else { return }
             self.probing = false
             guard self.sampling != nil else { return }
