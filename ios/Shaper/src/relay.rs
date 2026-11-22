@@ -152,6 +152,58 @@ struct Shared {
     next_socket: AtomicU64,
     /// Où dorment les fils qu'un plafond fait attendre ; l'arrêt les réveille.
     pause: Pause,
+    /// Les réseaux du partage, gardés quelques secondes.
+    networks: Networks,
+}
+
+/// Une liste d'adresses de réseau et son masque.
+type NetworkList = Vec<(Ipv4Addr, Ipv4Addr)>;
+
+/// Combien de temps la liste des réseaux du partage sert avant d'être relue.
+const NETWORKS_TTL: Duration = Duration::from_secs(5);
+/// Un appareil refusé fait relire la liste, au plus une fois par seconde.
+const NETWORKS_RECHECK: Duration = Duration::from_secs(1);
+
+/// Les réseaux du partage, lus avec `getifaddrs` (un appel système et une liste à
+/// parcourir) au plus une fois toutes les 5 s, et non à chaque connexion d'un appareil.
+/// Un appareil qui ne figure pas dans la liste gardée la fait relire, au plus une fois par
+/// seconde : un réseau de partage tout juste apparu est vu sans attendre.
+struct Networks {
+    source: Box<dyn Fn() -> NetworkList + Send + Sync>,
+    cached: Mutex<Option<(Instant, NetworkList)>>,
+    reads: AtomicU64,
+    ttl: Duration,
+    recheck: Duration,
+}
+
+impl Networks {
+    fn new(source: impl Fn() -> NetworkList + Send + Sync + 'static) -> Self {
+        Networks {
+            source: Box::new(source),
+            cached: Mutex::new(None),
+            reads: AtomicU64::new(0),
+            ttl: NETWORKS_TTL,
+            recheck: NETWORKS_RECHECK,
+        }
+    }
+
+    /// La liste, relue si elle a plus de `older_than`.
+    fn current(&self, older_than: Duration) -> NetworkList {
+        let mut cached = lock(&self.cached);
+        if let Some((read_at, list)) = cached.as_ref() {
+            if read_at.elapsed() < older_than {
+                return list.clone();
+            }
+        }
+        let list = (self.source)();
+        self.reads.fetch_add(1, Ordering::Relaxed);
+        *cached = Some((Instant::now(), list.clone()));
+        list
+    }
+
+    fn allows(&self, peer: IpAddr) -> bool {
+        allowed(peer, &self.current(self.ttl)) || allowed(peer, &self.current(self.recheck))
+    }
 }
 
 /// L'attente qu'impose un plafond : d'un seul sommeil jusqu'à l'échéance, plutôt que par
@@ -281,7 +333,7 @@ impl Shared {
         if peer.is_loopback() {
             return self.allow_loopback;
         }
-        allowed(peer, &sharing_networks())
+        self.networks.allows(peer)
     }
 }
 
@@ -325,6 +377,7 @@ impl Relay {
             sockets: Mutex::new(HashMap::new()),
             next_socket: AtomicU64::new(1),
             pause: Pause::new(),
+            networks: Networks::new(sharing_networks),
         });
         let accepting = Arc::clone(&shared);
         let accept = thread::Builder::new()
@@ -367,6 +420,8 @@ impl Relay {
     /// L'état du relais en JSON : plafonds, et pour chaque appareil vu depuis dix minutes,
     /// ses connexions ouvertes et les octets relayés dans chaque sens.
     pub fn status_json(&self) -> String {
+        // Lue avant de prendre le verrou des plafonds, que les connexions attendent.
+        let networks = self.shared.networks.current(self.shared.networks.ttl);
         let state = lock(&self.shared.state);
         let now = Instant::now();
         let mut clients: Vec<(&IpAddr, &Client)> = state
@@ -394,7 +449,7 @@ impl Relay {
                 )
             })
             .collect();
-        let addresses: Vec<String> = sharing_networks()
+        let addresses: Vec<String> = networks
             .iter()
             .map(|(address, _)| format!("\"{address}\""))
             .collect();
@@ -1391,6 +1446,38 @@ mod tests {
         assert!(sharing_networks()
             .iter()
             .any(|(address, _)| *address == Ipv4Addr::new(172, 20, 10, 1)));
+    }
+
+    #[test]
+    fn the_sharing_networks_are_not_read_at_every_connection() {
+        let hotspot = (
+            Ipv4Addr::new(172, 20, 10, 1),
+            Ipv4Addr::new(255, 255, 255, 240),
+        );
+        let bridge = (
+            Ipv4Addr::new(192, 168, 2, 1),
+            Ipv4Addr::new(255, 255, 255, 0),
+        );
+        let present = Arc::new(Mutex::new(vec![hotspot]));
+        let source = Arc::clone(&present);
+        let mut networks = Networks::new(move || lock(&source).clone());
+        let device: IpAddr = "172.20.10.2".parse().unwrap();
+        // Cinquante connexions d'un appareil du partage : une seule lecture.
+        for _ in 0..50 {
+            assert!(networks.allows(device));
+        }
+        assert_eq!(networks.reads.load(Ordering::Relaxed), 1);
+        // Un appareil hors du partage, juste après : refusé, sans relecture.
+        let stranger: IpAddr = "10.9.9.9".parse().unwrap();
+        assert!(!networks.allows(stranger));
+        assert_eq!(networks.reads.load(Ordering::Relaxed), 1);
+        // Un réseau de partage qui apparaît est vu dès qu'un de ses appareils se présente.
+        networks.recheck = Duration::ZERO;
+        lock(&present).push(bridge);
+        assert!(networks.allows("192.168.2.7".parse().unwrap()));
+        assert_eq!(networks.reads.load(Ordering::Relaxed), 2);
+        assert!(networks.allows(device));
+        assert_eq!(networks.reads.load(Ordering::Relaxed), 2);
     }
 
     #[test]
