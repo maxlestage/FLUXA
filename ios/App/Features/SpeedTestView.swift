@@ -20,12 +20,12 @@ struct SpeedTestView: View {
                         }
                     }
                     Reading(
-                        label: "↓ Descendant",
+                        symbol: "↓", label: "Descendant",
                         value: reading(final: runner.downloadBps, live: runner.phase == .download ? runner.liveBps : nil),
                         color: Theme.down
                     )
                     Reading(
-                        label: "↑ Montant",
+                        symbol: "↑", label: "Montant",
                         value: reading(final: runner.uploadBps, live: runner.phase == .upload ? runner.liveBps : nil),
                         color: Theme.up
                     )
@@ -188,6 +188,8 @@ extension SpeedTestView {
 }
 
 private struct Reading: View {
+    /// La flèche, montrée mais pas lue : VoiceOver dit seulement « Descendant ».
+    let symbol: String
     let label: String
     let value: String
     let color: Color
@@ -196,9 +198,10 @@ private struct Reading: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label)
+            Text("\(symbol) \(label)")
                 .font(.subheadline)
                 .foregroundStyle(Theme.secondary)
+                .accessibilityLabel(label)
             Text(value)
                 .font(.system(size: size, weight: .bold, design: .monospaced))
                 .minimumScaleFactor(0.5)
