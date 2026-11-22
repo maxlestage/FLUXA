@@ -47,6 +47,12 @@ struct SpeedTestView: View {
                             .font(.footnote)
                             .foregroundStyle(Theme.secondary)
                             .accessibilityIdentifier("test-termine")
+                        if let comparison = Self.comparison(model.speedTests) {
+                            Text(comparison)
+                                .font(.footnote)
+                                .foregroundStyle(Theme.secondary)
+                                .accessibilityIdentifier("comparaison-test")
+                        }
                     }
                 }
                 .padding(.vertical, 6)
@@ -155,6 +161,29 @@ struct SpeedTestView: View {
             text += " Aucun réseau pour l’instant."
         }
         return text
+    }
+}
+
+extension SpeedTestView {
+    /// Le dernier test comparé au précédent fait sur le même type de réseau : un test en
+    /// Wi-Fi ne se compare pas à un test sur le réseau mobile. `nil` sans test comparable.
+    static func comparison(_ tests: [SpeedTestResult]) -> String? {
+        guard let latest = tests.first, let download = latest.downloadBps,
+            let previous = tests.dropFirst().first(where: { $0.networkKind == latest.networkKind && ($0.downloadBps ?? 0) > 0 }),
+            let before = previous.downloadBps
+        else { return nil }
+        let change = ((download - before) / before * 100).rounded()
+        let network: String = switch latest.networkKind {
+        case .wifi: "en Wi-Fi"
+        case .cellular: "sur le réseau mobile"
+        case .wired: "en Ethernet"
+        case .other, .offline: "sur ce type de réseau"
+        }
+        if abs(change) < 5 {
+            return "Descendant : comme au test précédent \(network)."
+        }
+        let sign = change > 0 ? "+" : "−"
+        return "Descendant : \(sign)\(Format.number(abs(change), digits: 0))\u{00A0}% par rapport au test précédent \(network)."
     }
 }
 
