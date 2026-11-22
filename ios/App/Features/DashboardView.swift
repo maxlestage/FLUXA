@@ -7,6 +7,8 @@ import SwiftUI
 /// Chaque bloc est une vue à part qui lit elle-même ce dont elle a besoin : une mesure
 /// qui change chaque seconde ne redessine que son bloc, pas tout l'écran.
 struct DashboardView: View {
+    @Environment(AppModel.self) private var model
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -41,6 +43,9 @@ struct DashboardView: View {
             }
             .background(Theme.background)
             .navigationTitle("Tableau de bord")
+            // La sonde de latence ne tourne que tableau de bord affiché.
+            .onAppear { model.dashboardVisible = true }
+            .onDisappear { model.dashboardVisible = false }
         }
     }
 }

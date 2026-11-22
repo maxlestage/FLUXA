@@ -7,6 +7,7 @@ import WidgetKit
 @MainActor
 final class WidgetPublisher {
     private var lastReload: Date?
+    private var lastWrite: Date?
     private var lastShape: Shape?
 
     /// Ce qui, en changeant, mérite un rafraîchissement immédiat des widgets.
@@ -19,14 +20,24 @@ final class WidgetPublisher {
     /// Enregistre le relevé ; rafraîchit les widgets si leur allure change, s'il le faut
     /// (`force`, au passage en arrière-plan), ou au plus tous les quarts d'heure.
     func publish(_ snapshot: WidgetSnapshot, force: Bool = false) {
-        guard snapshot.publish() else { return }
         let shape = Shape(isOnline: snapshot.isOnline, hasPlan: snapshot.plan != nil, relayDevices: snapshot.relay?.devices)
         let now = Date()
+        // Le relevé n'est réécrit dans le trousseau que s'il change d'allure, s'il le faut,
+        // ou toutes les cinq minutes : les widgets disent l'heure du relevé qu'ils montrent.
+        guard Self.shouldWrite(force: force, shapeChanged: shape != lastShape, lastWrite: lastWrite, now: now),
+            snapshot.publish()
+        else { return }
+        lastWrite = now
         if Self.shouldReload(force: force, shapeChanged: shape != lastShape, lastReload: lastReload, now: now) {
             WidgetCenter.shared.reloadAllTimelines()
             lastReload = now
         }
         lastShape = shape
+    }
+
+    static func shouldWrite(force: Bool, shapeChanged: Bool, lastWrite: Date?, now: Date) -> Bool {
+        guard let lastWrite else { return true }
+        return force || shapeChanged || now.timeIntervalSince(lastWrite) >= 5 * 60
     }
 
     static func shouldReload(force: Bool, shapeChanged: Bool, lastReload: Date?, now: Date) -> Bool {
