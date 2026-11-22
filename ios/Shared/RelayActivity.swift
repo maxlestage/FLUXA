@@ -35,4 +35,26 @@ enum RelayActivityText {
     static func rate(_ bps: Double?) -> String {
         Format.rate(bps)
     }
+
+    /// Les appareils et leur débit, pour VoiceOver : « 2 appareils, 3,4 Mb/s vers eux ».
+    static func spokenTraffic(_ state: RelayActivityAttributes.ContentState) -> String {
+        let devices = Self.devices(state.devices)
+        guard state.devices > 0 else { return devices }
+        guard let bps = state.toDevicesBps else { return devices + ", débit vers eux non mesuré" }
+        return devices + ", \(Format.rate(bps)) vers \(state.devices > 1 ? "eux" : "lui")"
+    }
+
+    /// Le débit seul, pour VoiceOver, là où les appareils sont dits à côté.
+    static func spokenRate(_ bps: Double?) -> String {
+        bps.map { "Débit vers les appareils : \(Format.rate($0))" } ?? "Débit vers les appareils non mesuré"
+    }
+
+    /// Le plafond, pour VoiceOver : les flèches et le point médian deviennent des mots.
+    static func spokenCap(_ cap: String) -> String {
+        guard cap.contains("↓") || cap.contains("↑") else { return cap }
+        return "Plafond : "
+            + cap.replacingOccurrences(of: "↓", with: "descendant")
+            .replacingOccurrences(of: "↑", with: "montant")
+            .replacingOccurrences(of: " · ", with: ", ")
+    }
 }
