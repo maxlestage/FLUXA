@@ -500,6 +500,28 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 2, "jamais moins de deux secondes")
     }
 
+    func testASpeedTestIsComparedWithThePreviousOneOnTheSameNetwork() {
+        func test(_ minutes: Double, _ mbps: Double?, _ kind: NetworkKind) -> SpeedTestResult {
+            SpeedTestResult(
+                date: Date(timeIntervalSince1970: minutes * 60), downloadBps: mbps.map { $0 * 1_000_000 }, uploadBps: nil,
+                latencyMs: nil, networkKind: kind, server: "test.example", downloadedBytes: 0, uploadedBytes: 0)
+        }
+        XCTAssertNil(SpeedTestView.comparison([]))
+        XCTAssertNil(SpeedTestView.comparison([test(2, 50, .wifi)]), "rien à comparer")
+        // Le test sur le réseau mobile est sauté : on compare Wi-Fi à Wi-Fi.
+        XCTAssertEqual(
+            SpeedTestView.comparison([test(3, 56, .wifi), test(2, 10, .cellular), test(1, 50, .wifi)]),
+            "Descendant : +12\u{00A0}% par rapport au test précédent en Wi-Fi.")
+        XCTAssertEqual(
+            SpeedTestView.comparison([test(2, 25, .cellular), test(1, 50, .cellular)]),
+            "Descendant : −50\u{00A0}% par rapport au test précédent sur le réseau mobile.")
+        XCTAssertEqual(
+            SpeedTestView.comparison([test(2, 51, .wifi), test(1, 50, .wifi)]),
+            "Descendant : comme au test précédent en Wi-Fi.")
+        XCTAssertNil(SpeedTestView.comparison([test(2, nil, .wifi), test(1, 50, .wifi)]), "phase échouée")
+        XCTAssertNil(SpeedTestView.comparison([test(2, 50, .wifi), test(1, nil, .wifi)]))
+    }
+
     func testVoiceOverReadsArrowsAsWords() {
         XCTAssertEqual(
             Format.spoken("↓ 25\(space)Mb/s · ↑ 10\(space)Mb/s"), "descendant 25\(space)Mb/s, montant 10\(space)Mb/s")
