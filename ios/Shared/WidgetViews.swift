@@ -26,6 +26,15 @@ enum WidgetText {
 
     static let empty = "Ouvrez FLUXA pour afficher vos mesures."
 
+    /// Le bloc du jour en une phrase pour VoiceOver, sans flèches à épeler :
+    /// « Aujourd’hui : 46,4 Mo consommés. Débit descendant : 1,0 Mb/s. Relevé à 20:15. »
+    static func spokenToday(_ snapshot: WidgetSnapshot, now: Date = Date(), calendar: Calendar = .current) -> String {
+        let rate = snapshot.downloadBps.map { "Débit descendant : \(Format.rate($0))." } ?? "Débit descendant inconnu."
+        let reading = updated(snapshot.updatedAt, now: now, calendar: calendar)
+        return "\(day(of: snapshot.updatedAt, now: now, calendar: calendar)) : \(Format.bytes(snapshot.todayBytes)) consommés. "
+            + "\(rate) \(reading)\(reading.hasSuffix(".") ? "" : ".")"
+    }
+
     /// Le jour du volume affiché : « Aujourd’hui », ou « Le 20 nov. » pour un relevé d'un
     /// autre jour. Après minuit, le volume de la veille n'est pas présenté comme celui du jour.
     static func day(of date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
@@ -111,6 +120,8 @@ private struct TodayBlock: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(WidgetText.spokenToday(snapshot, now: now))
     }
 }
 
@@ -198,6 +209,8 @@ private struct CircularWidget: View {
                 Text(Format.rateParts(snapshot.downloadBps).unit)
                     .font(.system(size: 9))
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Débit descendant : \(Format.rate(snapshot.downloadBps))")
         }
     }
 }
