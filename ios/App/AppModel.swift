@@ -211,11 +211,27 @@ final class AppModel {
             Task { await resumeRelay() }
         }
         sampling = Task { [weak self] in
+            let clock = ContinuousClock()
+            var deadline = clock.now
             while !Task.isCancelled {
                 self?.sample()
-                try? await Task.sleep(for: .seconds(1))
+                deadline = Self.nextSample(after: deadline, now: clock.now)
+                try? await Task.sleep(until: deadline, tolerance: Self.sampleTolerance, clock: clock)
             }
         }
+    }
+
+    /// La marge laissée à iOS sur le réveil de chaque seconde : 100 ms, le dixième de
+    /// l'intervalle que recommande Apple. Le système peut ainsi grouper ce réveil avec ses
+    /// autres réveils. Le débit reste juste : il est calculé sur le temps réellement écoulé.
+    static let sampleTolerance: Duration = .milliseconds(100)
+
+    /// L'échéance du relevé suivant, une seconde après la précédente : le temps passé à
+    /// relever ne décale pas la cadence. Après un retard de plus d'une seconde (app ralentie),
+    /// la cadence repart d'une seconde après maintenant, sans rafale de relevés en retard.
+    static func nextSample(after previous: ContinuousClock.Instant, now: ContinuousClock.Instant) -> ContinuousClock.Instant {
+        let next = previous.advanced(by: .seconds(1))
+        return next > now ? next : now.advanced(by: .seconds(1))
     }
 
     func stop() {
