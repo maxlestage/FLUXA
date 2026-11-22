@@ -102,6 +102,14 @@ struct SpeedTestView: View {
                             .foregroundStyle(Theme.secondary)
                     }
                     .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("test-precedent")
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            model.deleteSpeedTest(test)
+                        } label: {
+                            Label("Supprimer", systemImage: "trash")
+                        }
+                    }
                 }
             }
         }

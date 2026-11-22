@@ -211,6 +211,16 @@ extension FluxaEngine {
     /// Les tests de débit, du plus récent au plus ancien.
     public var speedTests: [SpeedTestResult] { state.speedTests }
 
+    /// Supprime un test de débit, désigné par sa date. Rend `false` s'il n'existe plus.
+    @discardableResult
+    public func deleteSpeedTest(at date: Date) -> Bool {
+        let count = state.speedTests.count
+        state.speedTests.removeAll { $0.date == date }
+        guard state.speedTests.count < count else { return false }
+        saveQuietly()
+        return true
+    }
+
     // MARK: - Validation
 
     /// - Parameter old: la règle enregistrée que celle-ci remplace, s'il y en a une.
