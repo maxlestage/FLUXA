@@ -19,7 +19,8 @@ pub const ISLANDS: [(&str, Island); 3] = [
 ];
 
 /// Les liens du menu : l'ancre de la page d'accueil et son libellé.
-const MENU: [(&str, &str); 5] = [
+const MENU: [(&str, &str); 6] = [
+    ("#optimisation", "Optimisation"),
     ("#fonctions", "Fonctions"),
     ("#profils", "Profils"),
     ("#transparence", "Transparence"),

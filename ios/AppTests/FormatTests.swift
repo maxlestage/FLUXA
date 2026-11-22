@@ -492,6 +492,12 @@ final class FormatTests: XCTestCase {
         XCTAssertTrue(WidgetPublisher.shouldReload(force: false, shapeChanged: true, lastReload: now.addingTimeInterval(-60), now: now))
         XCTAssertTrue(WidgetPublisher.shouldReload(force: true, shapeChanged: false, lastReload: now.addingTimeInterval(-60), now: now))
         XCTAssertTrue(WidgetPublisher.shouldReload(force: false, shapeChanged: false, lastReload: now.addingTimeInterval(-900), now: now))
+        // Le trousseau n'est réécrit qu'au changement d'allure ou toutes les cinq minutes.
+        XCTAssertTrue(WidgetPublisher.shouldWrite(force: false, shapeChanged: false, lastWrite: nil, now: now))
+        XCTAssertFalse(WidgetPublisher.shouldWrite(force: false, shapeChanged: false, lastWrite: now.addingTimeInterval(-30), now: now))
+        XCTAssertTrue(WidgetPublisher.shouldWrite(force: false, shapeChanged: true, lastWrite: now.addingTimeInterval(-30), now: now))
+        XCTAssertTrue(WidgetPublisher.shouldWrite(force: true, shapeChanged: false, lastWrite: now.addingTimeInterval(-30), now: now))
+        XCTAssertTrue(WidgetPublisher.shouldWrite(force: false, shapeChanged: false, lastWrite: now.addingTimeInterval(-300), now: now))
         XCTAssertFalse(RelayActivityController.shouldUpdate(force: false, devicesChanged: false, lastUpdate: now.addingTimeInterval(-3), now: now))
         XCTAssertTrue(RelayActivityController.shouldUpdate(force: false, devicesChanged: true, lastUpdate: now.addingTimeInterval(-3), now: now))
         XCTAssertTrue(RelayActivityController.shouldUpdate(force: false, devicesChanged: false, lastUpdate: now.addingTimeInterval(-10), now: now))
@@ -504,6 +510,13 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 30)
         defaults.set(0.5, forKey: "fluxaCopyConfirmationSeconds")
         XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 2, "jamais moins de deux secondes")
+    }
+
+    func testTheLatencyProbeRunsOnlyWhileTheDashboardIsShown() {
+        XCTAssertTrue(AppModel.shouldProbe(dashboardVisible: true, tick: 6, interval: 5))
+        XCTAssertFalse(AppModel.shouldProbe(dashboardVisible: true, tick: 7, interval: 5))
+        XCTAssertFalse(AppModel.shouldProbe(dashboardVisible: false, tick: 6, interval: 5), "ailleurs, aucune sonde")
+        XCTAssertFalse(AppModel.shouldProbe(dashboardVisible: true, tick: 1, interval: 0))
     }
 
     func testTheLatencyProbeTakesAPastedAddress() {
