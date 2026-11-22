@@ -280,6 +280,7 @@ async fn the_optimisations_are_the_apps() {
         "sous 20 % de batterie",
         "ne se relisent que s’ils sont affichés",
         "laisse 100 ms de marge à iOS",
+        "part d’un tampon de 4 Ko, qui ne double, jusqu’à 64 Ko",
     ] {
         assert!(home.contains(fact), "l'optimisation ne dit plus : {fact}");
     }
@@ -308,6 +309,9 @@ async fn the_optimisations_are_the_apps() {
         "MIN_CHUNK: usize = 2 * 1024",
         "CONNECT_ATTEMPT: Duration = Duration::from_secs(3)",
         ".wait_timeout(finished, grace - silence)",
+        "START_CHUNK: usize = 4 * 1024",
+        "count == length && length < MAX_CHUNK",
+        "(length * 2).min(MAX_CHUNK)",
     ] {
         assert!(relay.contains(constant), "{constant}");
     }
