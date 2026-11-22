@@ -249,7 +249,7 @@ const OPTIMISATIONS: [(&str, &str, &str, &str); 8] = [
     (
         "o-compteurs",
         "Mesurer sans rien télécharger",
-        "Le débit et la consommation se lisent sur les compteurs réseau d’iOS, chaque seconde. Cette mesure n’envoie ni ne reçoit aucune donnée : seuls la sonde de latence et le test de débit, que vous lancez, en échangent.",
+        "Le débit et la consommation se lisent sur les compteurs réseau d’iOS, chaque seconde, sur un réveil qui laisse 100 ms de marge à iOS pour le grouper avec ses autres réveils. Cette mesure n’envoie ni ne reçoit aucune donnée : seuls la sonde de latence et le test de débit, que vous lancez, en échangent.",
         "Aucun octet pour mesurer le débit",
     ),
     (

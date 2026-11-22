@@ -279,6 +279,7 @@ async fn the_optimisations_are_the_apps() {
         "au plus toutes les 10 s",
         "sous 20 % de batterie",
         "ne se relisent que s’ils sont affichés",
+        "laisse 100 ms de marge à iOS",
     ] {
         assert!(home.contains(fact), "l'optimisation ne dit plus : {fact}");
     }
@@ -287,6 +288,8 @@ async fn the_optimisations_are_the_apps() {
     let model = read("App/AppModel.swift");
     assert!(model.contains("dashboardVisible && interval > 0"));
     assert!(model.contains("level < 0.2"));
+    assert!(model.contains("sampleTolerance: Duration = .milliseconds(100)"));
+    assert!(model.contains("tolerance: Self.sampleTolerance"));
     assert!(model.contains("relayScreenVisible ? 1 : (dashboardVisible ? 5 : 10)"));
     assert!(read("App/Features/HistoryView.swift").contains("visible ? revision() : nil"));
     assert!(
