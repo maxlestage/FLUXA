@@ -280,7 +280,9 @@ final class AppModel {
         let snapshot = engine.ingest(interfaces, bootTime: bootTime)
         set(\.interfaces, interfaces)
         set(\.snapshot, snapshot)
-        set(\.samples, engine.recentSamples)
+        if Self.followsLiveChart(dashboardVisible: dashboardVisible) {
+            set(\.samples, engine.recentSamples)
+        }
         refreshSharing()
         syncRelayLimits()
         if ticks % Self.relayPollInterval(relayScreenVisible: relayScreenVisible, dashboardVisible: dashboardVisible) == 0 {
@@ -445,10 +447,20 @@ final class AppModel {
     /// sonde ne tourne que là, et sonde dès qu'il réapparaît.
     var dashboardVisible = false {
         didSet {
-            if dashboardVisible, !oldValue, sampling != nil {
-                probeLatency()
+            if dashboardVisible, !oldValue {
+                // La courbe, laissée en l'état pendant l'absence, reprend la dernière minute.
+                set(\.samples, engine.recentSamples)
+                if sampling != nil {
+                    probeLatency()
+                }
             }
         }
+    }
+
+    /// La courbe en direct n'est montrée qu'au tableau de bord : ailleurs, sa fenêtre d'une
+    /// minute n'est ni recopiée ni comparée chaque seconde, et rien ne se redessine pour elle.
+    static func followsLiveChart(dashboardVisible: Bool) -> Bool {
+        dashboardVisible
     }
 
     /// Une sonde ouvre une connexion et réveille la radio (Wi-Fi ou réseau mobile) : elle

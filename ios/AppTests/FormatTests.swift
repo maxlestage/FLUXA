@@ -714,6 +714,11 @@ final class FormatTests: XCTestCase {
         XCTAssertTrue(anonymous.hasPrefix("172.20.10.3. débit vers l’appareil —"), anonymous)
     }
 
+    func testTheLiveChartIsFollowedOnlyOnTheDashboard() {
+        XCTAssertTrue(AppModel.followsLiveChart(dashboardVisible: true))
+        XCTAssertFalse(AppModel.followsLiveChart(dashboardVisible: false), "ailleurs, la courbe n'est pas recopiée")
+    }
+
     func testTheRelayIsPolledOftenOnlyWhenWatched() {
         XCTAssertEqual(AppModel.relayPollInterval(relayScreenVisible: true, dashboardVisible: false), 1)
         XCTAssertEqual(AppModel.relayPollInterval(relayScreenVisible: true, dashboardVisible: true), 1)
