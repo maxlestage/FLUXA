@@ -74,6 +74,14 @@ final class FormatTests: XCTestCase {
         XCTAssertNil(InterfaceCounters.classify("bridge0"))
         XCTAssertNil(InterfaceCounters.classify("awdl0"))
         XCTAssertNil(InterfaceCounters.classify("lo0"))
+        // Les interfaces qu'un iPhone montre aussi, écartées sur leur nom brut.
+        for name in ["ipsec0", "llw0", "anpi1", "ap1", "XHC0", "utun7", "e", ""] {
+            XCTAssertNil(InterfaceCounters.classify(name), name)
+        }
+        XCTAssertEqual(InterfaceCounters.classify("en10"), .wired)
+        XCTAssertEqual(InterfaceCounters.classify("en0x"), .wired, "seul en0 exact est le Wi-Fi")
+        XCTAssertEqual(InterfaceCounters.classify("pdp_ip3"), .cellular)
+        XCTAssertEqual(InterfaceCounters.classify("bridge101"), .sharing)
     }
 
     func testTheSystemCountersAreReadable() {
@@ -89,6 +97,9 @@ final class FormatTests: XCTestCase {
         // Le pont Thunderbolt d'un Mac (bridge0) n'est pas un partage de connexion.
         XCTAssertFalse(InterfaceCounters.isSharing([("en0", true), ("bridge0", true)]))
         XCTAssertFalse(InterfaceCounters.isSharing([]))
+        XCTAssertTrue(InterfaceCounters.counts(.wifi, isRunning: false))
+        XCTAssertFalse(InterfaceCounters.counts(.sharing, isRunning: false))
+        XCTAssertTrue(InterfaceCounters.counts(.sharing, isRunning: true))
     }
 
     func testRulesAreSummarisedInOneSentence() {
