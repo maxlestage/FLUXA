@@ -512,6 +512,19 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 2, "jamais moins de deux secondes")
     }
 
+    func testAHiddenScreenDoesNotFollowTheHistory() {
+        var read = 0
+        func revision() -> Int {
+            read += 1
+            return 42
+        }
+        XCTAssertEqual(HistoryView.watchedRevision(revision(), visible: true), 42)
+        XCTAssertEqual(read, 1)
+        // Caché, l'écran ne lit pas la révision : il n'est pas abonné à ses changements.
+        XCTAssertNil(HistoryView.watchedRevision(revision(), visible: false))
+        XCTAssertEqual(read, 1)
+    }
+
     func testTheLatencyProbeRunsOnlyWhileTheDashboardIsShown() {
         XCTAssertTrue(AppModel.shouldProbe(dashboardVisible: true, tick: 6, interval: 5))
         XCTAssertFalse(AppModel.shouldProbe(dashboardVisible: true, tick: 7, interval: 5))
