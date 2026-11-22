@@ -274,7 +274,7 @@ async fn the_optimisations_are_the_apps() {
         "256 Ko de pile",
         "de 2 à 64 Ko",
         "après 3 s",
-        "toutes les 5 s sinon",
+        "toutes les 5 s au tableau de bord, toutes les 10 s ailleurs",
         "au plus toutes les 10 s",
         "sous 20 % de batterie",
     ] {
@@ -285,7 +285,7 @@ async fn the_optimisations_are_the_apps() {
     let model = read("App/AppModel.swift");
     assert!(model.contains("dashboardVisible && interval > 0"));
     assert!(model.contains("level < 0.2"));
-    assert!(model.contains("screenVisible ? 1 : 5"));
+    assert!(model.contains("relayScreenVisible ? 1 : (dashboardVisible ? 5 : 10)"));
     let publisher = read("App/Services/WidgetPublisher.swift");
     assert!(publisher.contains("now.timeIntervalSince(lastWrite) >= 5 * 60"));
     assert!(publisher.contains("now.timeIntervalSince(lastReload) >= 15 * 60"));

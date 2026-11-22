@@ -273,8 +273,8 @@ const OPTIMISATIONS: [(&str, &str, &str, &str); 8] = [
     (
         "o-releves",
         "Relevés à la demande",
-        "L’état du relais est relevé chaque seconde quand son écran est affiché, toutes les 5 s sinon. L’activité en direct se met à jour au plus toutes les 10 s.",
-        "1 s à l’écran, 5 s ailleurs",
+        "L’état du relais est relevé chaque seconde quand son écran est affiché, toutes les 5 s au tableau de bord, toutes les 10 s ailleurs : le rythme de l’activité en direct, qui se met à jour au plus toutes les 10 s.",
+        "1 s · 5 s · 10 s",
     ),
     (
         "o-batterie",
