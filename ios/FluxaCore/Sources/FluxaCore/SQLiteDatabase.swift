@@ -31,6 +31,11 @@ enum SQLValue: Equatable {
 final class SQLiteDatabase {
     private var handle: OpaquePointer?
     let path: String
+    /// Les requêtes d'écriture, compilées une fois et réutilisées d'un enregistrement à
+    /// l'autre, au lieu d'être recompilées chaque minute.
+    private var statements: [String: SQLiteStatement] = [:]
+    /// Le nombre de requêtes compilées depuis l'ouverture.
+    fileprivate(set) var compiledStatements = 0
 
     /// Ouvre la base, ou la crée. `extraFlags` s'ajoute à lecture, écriture et création.
     init(path: String, extraFlags: Int32 = 0) throws {
@@ -47,6 +52,8 @@ final class SQLiteDatabase {
     }
 
     deinit {
+        // Les requêtes gardées sont finalisées avant la fermeture, qui sinon échouerait.
+        statements.removeAll()
         sqlite3_close(handle)
     }
 
@@ -66,6 +73,17 @@ final class SQLiteDatabase {
 
     func prepare(_ sql: String) throws -> SQLiteStatement {
         try SQLiteStatement(database: self, sql: sql)
+    }
+
+    /// La requête compilée pour `sql`, gardée pour les fois suivantes. Si le schéma change,
+    /// SQLite la recompile de lui-même.
+    func statement(_ sql: String) throws -> SQLiteStatement {
+        if let statement = statements[sql] {
+            return statement
+        }
+        let statement = try prepare(sql)
+        statements[sql] = statement
+        return statement
     }
 
     /// Lit toutes les lignes d'une requête.
@@ -104,7 +122,8 @@ final class SQLiteDatabase {
 
 /// Une requête préparée, réutilisable : on lie des valeurs, on exécute, on recommence.
 final class SQLiteStatement {
-    private let database: SQLiteDatabase
+    // Sans référence forte : la base garde ses requêtes, et une requête ne survit pas à sa base.
+    private unowned let database: SQLiteDatabase
     private var handle: OpaquePointer?
 
     fileprivate init(database: SQLiteDatabase, sql: String) throws {
@@ -112,6 +131,7 @@ final class SQLiteStatement {
         guard sqlite3_prepare_v2(database.connection, sql, -1, &handle, nil) == SQLITE_OK else {
             throw database.failure("requête refusée par la base")
         }
+        database.compiledStatements += 1
     }
 
     deinit {
@@ -149,9 +169,10 @@ final class SQLiteStatement {
 
     /// Lie les valeurs et exécute la requête jusqu'au bout.
     func run(_ values: [SQLValue] = []) throws {
+        // Remise à zéro même après une erreur : une requête gardée ne reste pas en cours.
+        defer { sqlite3_reset(handle) }
         try bind(values)
         while try step() {}
-        sqlite3_reset(handle)
     }
 
     func isNull(_ column: Int32) -> Bool { sqlite3_column_type(handle, column) == SQLITE_NULL }

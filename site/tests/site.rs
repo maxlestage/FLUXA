@@ -268,6 +268,7 @@ async fn the_optimisations_are_the_apps() {
         "que tableau de bord affiché : toutes les 5 s, toutes les 15 s",
         "toutes les 30 s en données réduites",
         "une fois par minute dans une base SQLite",
+        "par des requêtes compilées une seule fois puis réutilisées chaque minute",
         "au plus toutes les 5 minutes",
         "tous les quarts d’heure",
         "Au plus 192 connexions",
@@ -295,6 +296,16 @@ async fn the_optimisations_are_the_apps() {
     assert!(model.contains("sampleTolerance: Duration = .milliseconds(100)"));
     assert!(model.contains("tolerance: Self.sampleTolerance"));
     assert!(model.contains("if Self.followsLiveChart(dashboardVisible: dashboardVisible) {"));
+    let store = read("FluxaCore/Sources/FluxaCore/SQLiteStore.swift");
+    assert!(store.contains("let statement = try database.statement(upsert)"));
+    assert!(
+        !store.contains("database.prepare("),
+        "plus aucune écriture recompilée"
+    );
+    assert!(
+        read("FluxaCore/Sources/FluxaCore/SQLiteDatabase.swift")
+            .contains("if let statement = statements[sql] {")
+    );
     let counters = read("App/Services/InterfaceCounters.swift");
     assert!(
         counters.contains("guard let kind = classify(cName: interface.ifa_name) else { continue }")
