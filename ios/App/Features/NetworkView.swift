@@ -34,6 +34,8 @@ struct NetworkView: View {
                         Text("↓ \(Format.bytes(interface.receivedBytes)) · ↑ \(Format.bytes(interface.sentBytes))")
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(Theme.secondary)
+                            .accessibilityLabel(
+                                Format.spoken("↓ \(Format.bytes(interface.receivedBytes)) · ↑ \(Format.bytes(interface.sentBytes))"))
                     }
                 }
             } header: {
