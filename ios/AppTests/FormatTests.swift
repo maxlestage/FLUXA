@@ -364,7 +364,13 @@ final class FormatTests: XCTestCase {
         let today = IntentText.today(snapshot, now: now)
         XCTAssertTrue(today.hasPrefix("Aujourd’hui : 1,24\(space)Go reçus et envoyés."), today)
         XCTAssertTrue(today.contains("Relevé à"), "l'heure du relevé est dite")
-        XCTAssertEqual(IntentText.plan(snapshot, now: now).hasPrefix("Il reste 37,60\(space)Go sur 50\(space)Go."), true)
+        // Dix jours avant la remise à zéro : le reste se répartit sur dix jours.
+        snapshot.plan?.cycleEnd = now.addingTimeInterval(10 * 86_400 - 3_600)
+        let plan = IntentText.plan(snapshot, now: now)
+        XCTAssertTrue(plan.hasPrefix("Il reste 37,60\(space)Go sur 50\(space)Go, soit 3,76\(space)Go par jour jusqu’au "), plan)
+        // Un relevé d'un cycle passé ne donne pas de budget.
+        snapshot.plan?.cycleEnd = now.addingTimeInterval(-60)
+        XCTAssertTrue(IntentText.plan(snapshot, now: now).hasPrefix("Il reste 37,60\(space)Go sur 50\(space)Go. Relevé"))
         snapshot.plan = nil
         XCTAssertEqual(IntentText.plan(snapshot, now: now), "Aucun forfait n’est réglé dans FLUXA.")
         XCTAssertTrue(IntentText.today(nil).hasPrefix("Ouvrez FLUXA"))
