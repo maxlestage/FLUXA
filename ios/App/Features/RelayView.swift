@@ -186,7 +186,7 @@ private struct RelayClientRow: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(RelayText.spoken(name: name, client: client, rate: rate))
                 Spacer()
-                Text(RelayText.connections(client.connections))
+                Text(RelayText.connections(client.connections, idleSeconds: client.idleSeconds))
                     .font(.caption)
                     .foregroundStyle(Theme.tertiary)
                     .accessibilityHidden(true)
@@ -355,7 +355,7 @@ enum RelayText {
             "débit vers l’appareil \(Format.rate(rate?.toDeviceBps)), depuis l’appareil \(Format.rate(rate?.fromDeviceBps))")
         parts.append(
             "relayé : \(Format.bytes(client.toDeviceBytes)) vers l’appareil, \(Format.bytes(client.fromDeviceBytes)) depuis l’appareil")
-        parts.append(connections(client.connections))
+        parts.append(connections(client.connections, idleSeconds: client.idleSeconds))
         return parts.joined(separator: ". ")
     }
 
@@ -364,8 +364,11 @@ enum RelayText {
         active >= maximum ? "\(active) sur \(maximum), nouvelles refusées" : "\(active) sur \(maximum)"
     }
 
-    static func connections(_ count: Int) -> String {
-        count == 0 ? "inactif" : "\(count) connexion\(count > 1 ? "s" : "")"
+    /// « 2 connexions », ou « inactif depuis 4 min » d'après la dernière activité vue
+    /// par le relais (une minute au moins ; il oublie l'appareil après dix).
+    static func connections(_ count: Int, idleSeconds: Double = 0) -> String {
+        guard count == 0 else { return "\(count) connexion\(count > 1 ? "s" : "")" }
+        return idleSeconds >= 60 ? "inactif depuis \(Format.span(idleSeconds))" : "inactif"
     }
 
     static let instructions: [(platform: String, steps: String)] = [
