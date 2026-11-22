@@ -108,6 +108,17 @@ enum IntentText {
         if plan.usedBytes >= plan.allowanceBytes {
             return "Forfait dépassé : \(Format.bytes(plan.usedBytes)) utilisés. \(WidgetText.updated(snapshot.updatedAt, now: now))."
         }
-        return "Il reste \(Format.bytes(plan.remainingBytes)) sur \(Format.gigabytes(plan.allowanceBytes)). \(WidgetText.updated(snapshot.updatedAt, now: now))."
+        return "Il reste \(Format.bytes(plan.remainingBytes)) sur \(Format.gigabytes(plan.allowanceBytes))"
+            + "\(dailyBudget(plan, now: now)). \(WidgetText.updated(snapshot.updatedAt, now: now))."
+    }
+
+    /// « , soit 3,76 Go par jour jusqu’au 1 déc. » : le reste réparti sur les jours qui
+    /// mènent à la remise à zéro, comme le budget par jour de l'écran Forfait. Rien si
+    /// la remise à zéro est passée (relevé d'un autre cycle).
+    static func dailyBudget(_ plan: WidgetSnapshot.Plan, now: Date) -> String {
+        let seconds = plan.cycleEnd.timeIntervalSince(now)
+        guard seconds > 0 else { return "" }
+        let days = max(1, Int((seconds / 86_400).rounded(.up)))
+        return ", soit \(Format.bytes(plan.remainingBytes / UInt64(days))) par jour jusqu’au \(Format.day(plan.cycleEnd))"
     }
 }
