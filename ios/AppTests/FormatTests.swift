@@ -506,6 +506,23 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayText.copyConfirmationSeconds(defaults), 2, "jamais moins de deux secondes")
     }
 
+    func testTheScreenStaysOnForTheRelayUnlessTheBatteryIsLow() {
+        func keeps(open: Bool = true, wanted: Bool = true, background: Bool = false, level: Float = 0.8, charging: Bool = false)
+            -> Bool
+        {
+            AppModel.keepsScreenOn(
+                relayOpen: open, wanted: wanted, relayInBackground: background, batteryLevel: level, charging: charging)
+        }
+        XCTAssertTrue(keeps())
+        XCTAssertFalse(keeps(open: false))
+        XCTAssertFalse(keeps(wanted: false))
+        XCTAssertFalse(keeps(background: true), "l'extension tient le relais : l'écran peut s'éteindre")
+        XCTAssertFalse(keeps(level: 0.15), "batterie faible")
+        XCTAssertTrue(keeps(level: 0.15, charging: true), "en charge, la batterie ne compte pas")
+        XCTAssertTrue(keeps(level: 0.2))
+        XCTAssertTrue(keeps(level: -1), "niveau inconnu (simulateur)")
+    }
+
     func testASpeedTestIsComparedWithThePreviousOneOnTheSameNetwork() {
         func test(_ minutes: Double, _ mbps: Double?, _ kind: NetworkKind) -> SpeedTestResult {
             SpeedTestResult(

@@ -64,6 +64,12 @@ struct RelayView: View {
                 }
                 if model.relayIsRunning, !model.relayRunsInBackground {
                     Toggle("Garder l’écran allumé", isOn: $model.keepsScreenOnForRelay)
+                    if model.screenOnPausedForBattery {
+                        Label(RelayText.batteryPause, systemImage: "battery.25")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.up)
+                            .accessibilityIdentifier("relais-batterie-faible")
+                    }
                 }
             } footer: {
                 Text(RelayText.runningNote(inBackground: model.relayRunsInBackground, running: model.relayIsRunning))
@@ -274,6 +280,9 @@ private struct CopyRow: View {
 
 /// Les phrases du relais, séparées de l'écran pour être testées.
 enum RelayText {
+    static let batteryPause =
+        "Batterie sous 20 % : l’écran peut s’éteindre pour l’économiser. Le relais s’arrêtera avec lui ; branchez l’iPhone pour le garder."
+
     /// Ce que le relais voit, sous la liste de ce qu'iOS ne fournit pas (Mes appareils).
     static let devicesNote =
         "Le relais FLUXA voit les appareils réglés sur lui : leur adresse sur le partage, leur trafic relayé, "
