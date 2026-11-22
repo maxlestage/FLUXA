@@ -4,10 +4,11 @@ import SwiftUI
 /// Le centre de diagnostic : ce que l'iPhone permet, l'état du moteur et son journal.
 struct DiagnosticsView: View {
     @Environment(AppModel.self) private var model
+    @State private var visible = false
 
     var body: some View {
         // L'écran se relit quand l'historique ou les limites changent.
-        let _ = model.historyRevision
+        let _ = HistoryView.watchedRevision(model.historyRevision, visible: visible)
         let diagnostics = model.diagnostics
 
         List {
@@ -82,6 +83,8 @@ struct DiagnosticsView: View {
         .fluxaBackground()
         .navigationTitle("Diagnostic")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { visible = true }
+        .onDisappear { visible = false }
     }
 
     private func color(for level: EngineEvent.Level) -> Color {

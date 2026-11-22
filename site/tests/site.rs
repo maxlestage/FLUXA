@@ -277,6 +277,7 @@ async fn the_optimisations_are_the_apps() {
         "toutes les 5 s au tableau de bord, toutes les 10 s ailleurs",
         "au plus toutes les 10 s",
         "sous 20 % de batterie",
+        "ne se relisent que s’ils sont affichés",
     ] {
         assert!(home.contains(fact), "l'optimisation ne dit plus : {fact}");
     }
@@ -286,6 +287,11 @@ async fn the_optimisations_are_the_apps() {
     assert!(model.contains("dashboardVisible && interval > 0"));
     assert!(model.contains("level < 0.2"));
     assert!(model.contains("relayScreenVisible ? 1 : (dashboardVisible ? 5 : 10)"));
+    assert!(read("App/Features/HistoryView.swift").contains("visible ? revision() : nil"));
+    assert!(
+        read("App/Features/DiagnosticsView.swift")
+            .contains("watchedRevision(model.historyRevision, visible: visible)")
+    );
     let publisher = read("App/Services/WidgetPublisher.swift");
     assert!(publisher.contains("now.timeIntervalSince(lastWrite) >= 5 * 60"));
     assert!(publisher.contains("now.timeIntervalSince(lastReload) >= 15 * 60"));
