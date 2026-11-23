@@ -805,6 +805,11 @@ impl Progress {
 }
 
 /// Relaie dans les deux sens, en plafonnant chacun, jusqu'à la fin de l'échange.
+///
+/// Les deux fils se partagent les deux sockets par référence (`&TcpStream` sait lire et
+/// écrire) : aucune n'est dupliquée. Une connexion relayée garde ainsi quatre descripteurs
+/// (l'appareil, le site, et la copie de chacun gardée pour l'arrêt du relais) au lieu de
+/// neuf, loin de la limite qu'iOS fixe aux descripteurs ouverts d'une app.
 fn tunnel(
     shared: &Arc<Shared>,
     client: &mut TcpStream,
@@ -814,58 +819,50 @@ fn tunnel(
     client.set_read_timeout(None)?;
     let _ = upstream.set_nodelay(true);
     let upstream_id = shared.register(&upstream);
-    let progress = Arc::new(Progress::new());
+    let progress = Progress::new();
+    let (client, upstream): (&TcpStream, &TcpStream) = (client, &upstream);
 
-    let sending = Arc::clone(shared);
-    let watching = Arc::clone(&progress);
-    let from_device = client.try_clone()?;
-    let to_server = upstream.try_clone()?;
-    let uploader = thread::Builder::new()
-        .name("fluxa-relay-upload".into())
-        .stack_size(CONNECTION_STACK)
-        .spawn(move || {
-            let _ = pipe(
-                &sending,
-                peer,
-                from_device,
-                to_server.try_clone(),
-                Direction::Upload,
-                None,
-            );
-            // L'appareil a fini d'envoyer : le serveur peut finir sa réponse. Un serveur
-            // muet trop longtemps ne garde pas la connexion, ni sa place, ni ses fils.
-            let _ = to_server.shutdown(Shutdown::Write);
-            let grace = *lock(&sending.close_grace);
-            if watching.wait_for_download(grace, &sending.stop).0 {
-                let _ = to_server.shutdown(Shutdown::Both);
-            }
-        })?;
+    let relayed = thread::scope(|scope| -> io::Result<()> {
+        let uploader = thread::Builder::new()
+            .name("fluxa-relay-upload".into())
+            .stack_size(CONNECTION_STACK)
+            .spawn_scoped(scope, || {
+                let _ = pipe(shared, peer, client, upstream, Direction::Upload, None);
+                // L'appareil a fini d'envoyer : le serveur peut finir sa réponse. Un serveur
+                // muet trop longtemps ne garde pas la connexion, ni sa place, ni ses fils.
+                let _ = upstream.shutdown(Shutdown::Write);
+                let grace = *lock(&shared.close_grace);
+                if progress.wait_for_download(grace, &shared.stop).0 {
+                    let _ = upstream.shutdown(Shutdown::Both);
+                }
+            })?;
 
-    let _ = pipe(
-        shared,
-        peer,
-        upstream.try_clone()?,
-        client.try_clone(),
-        Direction::Download,
-        Some(&progress),
-    );
-    progress.finish();
-    let _ = client.shutdown(Shutdown::Both);
-    let _ = upstream.shutdown(Shutdown::Both);
-    let _ = uploader.join();
+        let _ = pipe(
+            shared,
+            peer,
+            upstream,
+            client,
+            Direction::Download,
+            Some(&progress),
+        );
+        progress.finish();
+        let _ = client.shutdown(Shutdown::Both);
+        let _ = upstream.shutdown(Shutdown::Both);
+        let _ = uploader.join();
+        Ok(())
+    });
     shared.unregister(upstream_id);
-    Ok(())
+    relayed
 }
 
 fn pipe(
     shared: &Shared,
     peer: IpAddr,
-    mut from: TcpStream,
-    to: io::Result<TcpStream>,
+    mut from: &TcpStream,
+    mut to: &TcpStream,
     direction: Direction,
     progress: Option<&Progress>,
 ) -> io::Result<()> {
-    let mut to = to?;
     // Un seul tampon par sens, sur le tas ; la taille lue suit le plafond.
     let mut buffer = Buffer::new();
     let mut chunk = MAX_CHUNK;

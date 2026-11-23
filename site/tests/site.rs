@@ -273,6 +273,7 @@ async fn the_optimisations_are_the_apps() {
         "tous les quarts d’heure",
         "Au plus 192 connexions",
         "256 Ko de pile",
+        "quatre descripteurs de fichier par connexion au lieu de neuf",
         "de 2 à 64 Ko",
         "après 3 s",
         "relus au plus toutes les 5 s, et non à chaque connexion",
@@ -310,6 +311,8 @@ async fn the_optimisations_are_the_apps() {
     assert!(model.contains(
         "guard let self, Self.pathChanged(from: self.path, to: details) else { return }"
     ));
+    let descriptors = read("Shaper/tests/descriptors.rs");
+    assert!(descriptors.contains("assert!(per_tunnel <= 6.0"));
     let bridge = read("App/Services/RelayBridge.swift");
     assert!(bridge.contains("RelayStatus.decode(Data(bytes: pointer, count: strlen(pointer)))"));
     assert!(bridge.contains("static let decoder = JSONDecoder()"));
@@ -350,6 +353,10 @@ async fn the_optimisations_are_the_apps() {
     assert!(publisher.contains("now.timeIntervalSince(lastReload) >= 15 * 60"));
     assert!(publisher.contains("now.timeIntervalSince(lastUpdate) >= 10"));
     let relay = read("Shaper/src/relay.rs");
+    assert!(
+        !relay.contains("try_clone()?"),
+        "plus aucune socket dupliquée par tunnel"
+    );
     for constant in [
         "MAX_CONNECTIONS: usize = 192",
         "CONNECTION_STACK: usize = 256 * 1024",
@@ -364,6 +371,7 @@ async fn the_optimisations_are_the_apps() {
         ".wait_timeout(guard, left)",
         "self.shared.pause.wake();",
         "NETWORKS_TTL: Duration = Duration::from_secs(5)",
+        ".spawn_scoped(scope, || {",
         "self.networks.allows(peer)",
         "assert_eq!(few, 3,",
         "assert_eq!(many, 3,",
