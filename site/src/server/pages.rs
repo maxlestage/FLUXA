@@ -255,7 +255,7 @@ const OPTIMISATIONS: [(&str, &str, &str, &str); 8] = [
     (
         "o-disque",
         "Le stockage ménagé",
-        "L’historique s’enregistre une fois par minute dans une base SQLite en journal anticipé, sans attendre le disque à chaque sauvegarde. Seul ce qui a changé est réécrit, par des requêtes compilées une seule fois puis réutilisées chaque minute.",
+        "L’historique s’enregistre une fois par minute dans une base SQLite en journal anticipé, sans attendre le disque à chaque sauvegarde. Seul ce qui a changé est réécrit, par des requêtes compilées une seule fois puis réutilisées chaque minute. Pour le trouver, les périodes de l’historique, plus de 11 000 sur 7 jours de minutes, 30 jours d’heures et 12 mois de jours, sont comparées d’un seul parcours, sans être rangées une à une dans une table.",
         "Une écriture par minute",
     ),
     (
