@@ -837,6 +837,15 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(RelayText.load(active: 3, maximum: 192), "3 sur 192")
         XCTAssertEqual(RelayText.load(active: 192, maximum: 192), "192 sur 192, nouvelles refusées")
         XCTAssertEqual(status.clients?.first?.toDeviceBytes, 1_200)
+        // Les mêmes octets, lus sans passer par une chaîne, par le décodeur gardé, qui ne
+        // convertit aucune clé à la volée.
+        XCTAssertEqual(RelayStatus.decode(Data(json.utf8)), status)
+        XCTAssertTrue(RelayStatus.decoder === RelayStatus.decoder)
+        if case .useDefaultKeys = RelayStatus.decoder.keyDecodingStrategy {} else {
+            XCTFail("aucune conversion de clé")
+        }
+        XCTAssertEqual(status.clients?.first?.idleSeconds, 0.4)
+        XCTAssertEqual(status.downloadLimit, 625_000)
         XCTAssertEqual(RelayStatus.decode("{\"running\":false}")?.running, false)
         XCTAssertEqual(RelayStatus.decode("{\"running\":false}")?.address, RelayBridge.defaultAddress)
         XCTAssertEqual(RelayText.pacURL(address: "172.20.10.1"), "http://172.20.10.1:8888/proxy.pac")

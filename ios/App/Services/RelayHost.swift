@@ -190,7 +190,7 @@ final class TunnelRelayHost: RelayHost {
 
     func status() async -> RelayStatus? {
         guard let data = await send(Data(#"{"command":"status"}"#.utf8)) else { return nil }
-        return RelayStatus.decode(String(decoding: data, as: UTF8.self))
+        return RelayStatus.decode(data)
     }
 
     func isRunning() async -> Bool {
