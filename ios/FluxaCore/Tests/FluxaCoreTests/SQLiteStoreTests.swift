@@ -713,6 +713,42 @@ final class SQLiteStoreTests: XCTestCase {
         XCTAssertGreaterThan(first, 3, "le premier enregistrement écrit aussi les préréglages et les réglages")
     }
 
+    func testTheHistoryIsComparedInOnePass() {
+        let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        func bucket(_ minute: Int, _ bytes: UInt64 = 1_000) -> Bucket {
+            var bucket = Bucket(start: start.addingTimeInterval(Double(minute) * 60))
+            bucket.add(Measurement(date: bucket.start, seconds: 1, receivedBytes: bytes, sentBytes: 10))
+            return bucket
+        }
+        // Une semaine de minutes : la plus vieille purgée, la dernière complétée, une nouvelle.
+        let old = (0..<10_080).map { bucket($0) }
+        var new = Array(old.dropFirst())
+        new[new.count - 1] = bucket(10_079, 2_000)
+        new.append(bucket(10_080))
+        let changes = SQLiteStore.changes(from: old, to: new)
+        XCTAssertEqual(changes.removed, [old[0].start])
+        XCTAssertEqual(changes.changed.map(\.start), [new[new.count - 2].start, new[new.count - 1].start])
+        XCTAssertTrue(SQLiteStore.changes(from: old, to: old).changed.isEmpty)
+        XCTAssertEqual(SQLiteStore.changes(from: [], to: old).changed.count, 10_080)
+        XCTAssertEqual(SQLiteStore.changes(from: old, to: []).removed.count, 10_080)
+    }
+
+    func testAFullWeekSavedAgainWritesOnlyWhatChanged() throws {
+        let store = try SQLiteStore(url: url)
+        var state = EngineState()
+        let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        for minute in 0..<10_080 {
+            let date = start.addingTimeInterval(Double(minute) * 60)
+            state.minutes.add(Measurement(date: date, seconds: 1, receivedBytes: 1_000, sentBytes: 10), at: date)
+        }
+        try store.save(state)
+        let date = start.addingTimeInterval(10_080 * 60)
+        state.minutes.add(Measurement(date: date, seconds: 1, receivedBytes: 1_000, sentBytes: 10), at: date)
+        try store.save(state)
+        XCTAssertEqual(store.lastSaveChanges, 1)
+        XCTAssertEqual(try SQLiteStore(url: url).load()?.minutes, state.minutes)
+    }
+
     func testTheWritesOfAMinuteAreCompiledOnce() throws {
         let store = try SQLiteStore(url: url)
         let bench = Bench(store: store).started()

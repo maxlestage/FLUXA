@@ -269,6 +269,7 @@ async fn the_optimisations_are_the_apps() {
         "toutes les 30 s en données réduites",
         "une fois par minute dans une base SQLite",
         "par des requêtes compilées une seule fois puis réutilisées chaque minute",
+        "plus de 11 000 sur 7 jours de minutes, 30 jours d’heures et 12 mois de jours, sont comparées d’un seul parcours",
         "au plus toutes les 5 minutes",
         "tous les quarts d’heure",
         "Au plus 192 connexions",
@@ -328,6 +329,16 @@ async fn the_optimisations_are_the_apps() {
             .contains("HotspotGuideView.watched(model.sharing, visible: visible)")
     );
     let store = read("FluxaCore/Sources/FluxaCore/SQLiteStore.swift");
+    assert!(store.contains("var usage: [String: [Bucket]]"));
+    assert!(store.contains("static func changes(from old: [Bucket], to new: [Bucket])"));
+    let engine = read("FluxaCore/Sources/FluxaCore/Engine.swift");
+    for retention in [
+        "date.addingTimeInterval(-7 * 86_400)",
+        "date.addingTimeInterval(-30 * 86_400)",
+        "calendar.date(byAdding: .month, value: -12, to: date)",
+    ] {
+        assert!(engine.contains(retention), "{retention}");
+    }
     assert!(store.contains("let statement = try database.statement(upsert)"));
     assert!(
         !store.contains("database.prepare("),
