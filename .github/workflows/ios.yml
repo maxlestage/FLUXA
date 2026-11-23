@@ -32,9 +32,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # macOS sur la machine du job de l'app : les machines macos-latest ont manqué
+        # plusieurs fois, et le job, faute de machine, finissait annulé et le run rouge.
+        os: [ubuntu-latest, xcode-27]
     steps:
       - uses: actions/checkout@v4
+      - name: Use the newest Xcode
+        if: runner.os == 'macOS'
+        run: .github/scripts/select-xcode.sh
       - name: Swift version
         run: swift --version
       - name: Install SQLite's headers
