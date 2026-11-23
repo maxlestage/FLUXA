@@ -330,6 +330,10 @@ async fn the_optimisations_are_the_apps() {
     );
     let store = read("FluxaCore/Sources/FluxaCore/SQLiteStore.swift");
     assert!(store.contains("var usage: [String: [Bucket]]"));
+    assert!(store.contains("var networkUsage: [String: [NetworkBucket]]"));
+    assert!(
+        home.contains("comme le volume par réseau, sans être rangées une à une dans une table")
+    );
     assert!(store.contains("static func changes(from old: [Bucket], to new: [Bucket])"));
     let engine = read("FluxaCore/Sources/FluxaCore/Engine.swift");
     for retention in [
