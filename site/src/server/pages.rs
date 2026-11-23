@@ -285,7 +285,7 @@ const OPTIMISATIONS: [(&str, &str, &str, &str); 8] = [
     (
         "o-modes",
         "Les réglages d’iOS respectés",
-        "Économie d’énergie et données réduites ralentissent la sonde. Sur un réseau facturé à l’usage, le test de débit demande confirmation et annonce le volume qu’il peut consommer, 260 Mo au plus. Ce volume est tenu : chaque morceau reçu ou envoyé est compté, et le test s’arrête à celui qui l’atteint.",
+        "Économie d’énergie et données réduites ralentissent la sonde. Sur un réseau facturé à l’usage, le test de débit demande confirmation et annonce le volume qu’il peut consommer, 260 Mo au plus. Ce volume est tenu : chaque morceau reçu ou envoyé est compté, et le test s’arrête à celui qui l’atteint. Ses données d’envoi sont tirées au hasard par mots de 64 bits : un tirage pour huit octets, et non un par octet.",
         "Économie d’énergie · données réduites",
     ),
 ];

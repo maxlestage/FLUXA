@@ -326,6 +326,9 @@ async fn the_optimisations_are_the_apps() {
     let speed = read("App/Services/SpeedTest.swift");
     assert!(speed.contains("return self == .download ? 200_000_000 : 60_000_000"));
     assert!(speed.contains("TransferCounter(budget: TransferBudget(limit: direction.byteLimit))"));
+    assert!(speed.contains("words[index] = generator.next()"));
+    assert!(!speed.contains("UInt8.random"));
+    assert!(home.contains("tirées au hasard par mots de 64 bits : un tirage pour huit octets"));
     assert!(read("App/Features/SpeedTestView.swift").contains("jusqu’à 260 Mo de votre forfait"));
     let settings = read("App/Features/SettingsView.swift");
     assert!(settings.contains("model.planAllowanceBytes") && !settings.contains("model.plan."));
