@@ -727,6 +727,22 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(reads, 1)
     }
 
+    func testTheSpeedTestStopsAtTheVolumeItAnnounces() {
+        // 200 Mo en réception, par morceaux de 64 Ko : le volume compte à chaque morceau.
+        var budget = TransferBudget(limit: 200_000_000)
+        var chunks = 0
+        while budget.spend(65_536) {
+            chunks += 1
+        }
+        // Le dépassement se borne au morceau qui atteint le volume, et non à 200 ms de trafic.
+        XCTAssertGreaterThanOrEqual(budget.spent, 200_000_000)
+        XCTAssertLessThan(budget.spent, 200_000_000 + 65_536)
+        XCTAssertEqual(chunks, 200_000_000 / 65_536)
+        XCTAssertFalse(budget.spend(0), "atteint, il le reste")
+        // 200 Mo reçus et 60 Mo envoyés : les 260 Mo annoncés sur un réseau facturé.
+        XCTAssertTrue(SpeedTestView.meteredWarning(remaining: nil).contains("260 Mo"))
+    }
+
     func testAPathNoticeThatChangesNothingShownIsIgnored() {
         let wifi = PathDetails(kind: .wifi, isOnline: true)
         // Une nouvelle adresse ou un autre serveur DNS : le même chemin pour l'app.
