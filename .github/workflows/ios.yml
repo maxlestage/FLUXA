@@ -130,9 +130,19 @@ jobs:
           # compte comme rattrapé un test échoué qui a réussi à sa relance.
           tests() { grep -oE "^Test Case '-\[[^]]+\]' $1" test.log | sed -E "s/^Test Case '-\[([^]]+)\]' .*/\1/" | sort -u; }
           still_failing=$(comm -23 <(tests failed) <(tests passed))
-          if grep -q "The test runner crashed\|Test runner never began executing tests\|Restarting after unexpected exit" test.log \
-            && [ -z "$still_failing" ]; then
-            echo "::warning::Le lanceur de tests a planté ou s'est bloqué de lui-même : les tests sont refaits une fois."
+          # Un test dont chaque erreur vient du simulateur, qui n'a pu lancer, fermer ou
+          # ramener l'app, n'a rien vérifié : il ne compte pas comme un échec de l'app.
+          simulator="Failed to (launch|terminate|activate)|does not have a process ID|Timed out attempting to launch"
+          app_failing=""
+          while IFS= read -r name; do
+            [ -z "$name" ] && continue
+            if grep -F -- "-[$name]" test.log | grep " error: " | grep -vqE "$simulator"; then
+              app_failing="$app_failing$name"$'\n'
+            fi
+          done <<< "$still_failing"
+          if { [ -z "$still_failing" ] && grep -q "The test runner crashed\|Test runner never began executing tests\|Restarting after unexpected exit" test.log; } \
+            || { [ -n "$still_failing" ] && [ -z "$app_failing" ]; }; then
+            echo "::warning::Le lanceur de tests ou le simulateur a flanché de lui-même : les tests sont refaits une fois."
             # Sur un simulateur remis à neuf : les tests d'interface partent d'une app vierge,
             # comme au premier passage, et non de ce que la première passe a enregistré.
             xcrun simctl shutdown "$DEVICE" || true
