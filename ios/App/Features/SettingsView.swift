@@ -16,7 +16,7 @@ struct SettingsView: View {
                         PlanView()
                     } label: {
                         LabeledContent {
-                            Text(model.plan.map { Format.gigabytes($0.plan.allowanceBytes) } ?? "Non réglé")
+                            Text(model.planAllowanceBytes.map(Format.gigabytes) ?? "Non réglé")
                                 .font(.body.monospacedDigit())
                         } label: {
                             Label("Forfait mobile", systemImage: "simcard")
