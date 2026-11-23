@@ -131,8 +131,9 @@ jobs:
           tests() { grep -oE "^Test Case '-\[[^]]+\]' $1" test.log | sed -E "s/^Test Case '-\[([^]]+)\]' .*/\1/" | sort -u; }
           still_failing=$(comm -23 <(tests failed) <(tests passed))
           # Un test dont chaque erreur vient du simulateur, qui n'a pu lancer, fermer ou
-          # ramener l'app, n'a rien vérifié : il ne compte pas comme un échec de l'app.
-          simulator="Failed to (launch|terminate|activate)|does not have a process ID|Timed out attempting to launch"
+          # ramener l'app, ou dont l'outil de test a perdu le contact avec elle, n'a rien
+          # vérifié : il ne compte pas comme un échec de l'app.
+          simulator="Failed to (launch|terminate|activate)|does not have a process ID|Timed out attempting to launch|Lost connection to the application"
           app_failing=""
           while IFS= read -r name; do
             [ -z "$name" ] && continue
