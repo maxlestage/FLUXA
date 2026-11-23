@@ -288,6 +288,7 @@ async fn the_optimisations_are_the_apps() {
         "le tableau de bord ne suit la mesure de chaque seconde, et ne recopie la courbe de la dernière minute, que s’il est affiché",
         "l’onglet Partage ne suit l’état du partage, qui change chaque seconde, que s’il est affiché",
         "Les réglages ne suivent que le volume du forfait, pas son usage relevé toutes les 10 s",
+        "260 Mo au plus. Ce volume est tenu : chaque morceau reçu ou envoyé est compté",
         "Un avis d’iOS sur le réseau qui ne change rien de ce que l’app en montre ne réécrit rien",
         "laisse 100 ms de marge à iOS",
         "écartées sur leur nom brut, sans rien copier",
@@ -322,6 +323,10 @@ async fn the_optimisations_are_the_apps() {
         read("RelayExtension/PacketTunnelProvider.swift")
             .contains("Data(bytes: pointer, count: strlen(pointer))")
     );
+    let speed = read("App/Services/SpeedTest.swift");
+    assert!(speed.contains("return self == .download ? 200_000_000 : 60_000_000"));
+    assert!(speed.contains("TransferCounter(budget: TransferBudget(limit: direction.byteLimit))"));
+    assert!(read("App/Features/SpeedTestView.swift").contains("jusqu’à 260 Mo de votre forfait"));
     let settings = read("App/Features/SettingsView.swift");
     assert!(settings.contains("model.planAllowanceBytes") && !settings.contains("model.plan."));
     assert!(
