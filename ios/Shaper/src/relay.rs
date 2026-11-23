@@ -20,6 +20,7 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
+use std::os::fd::{AsRawFd, RawFd};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread;
@@ -149,7 +150,9 @@ struct Shared {
     /// Voir `CLOSE_GRACE` ; plus court dans les tests.
     close_grace: Mutex<Duration>,
     state: Mutex<State>,
-    sockets: Mutex<HashMap<u64, TcpStream>>,
+    /// Les sockets en service, par leur numéro de descripteur : l'arrêt du relais les coupe.
+    /// Un numéro, et non une copie de la socket : aucun descripteur de plus par connexion.
+    sockets: Mutex<HashMap<u64, RawFd>>,
     next_socket: AtomicU64,
     /// Où dorment les fils qu'un plafond fait attendre ; l'arrêt les réveille.
     pause: Pause,
@@ -255,6 +258,18 @@ impl Pause {
     }
 }
 
+/// Une socket inscrite auprès du relais, retirée à l'abandon, même lors d'une panique.
+struct Registration<'a> {
+    shared: &'a Shared,
+    id: u64,
+}
+
+impl Drop for Registration<'_> {
+    fn drop(&mut self) {
+        lock(&self.shared.sockets).remove(&self.id);
+    }
+}
+
 /// Un verrou empoisonné par une panique ailleurs reste utilisable : l'état est simple.
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
@@ -263,17 +278,13 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Shared {
-    fn register(&self, stream: &TcpStream) -> Option<u64> {
-        let clone = stream.try_clone().ok()?;
+    /// Inscrit une socket pour que l'arrêt du relais la coupe. Le numéro est retiré quand
+    /// l'inscription est abandonnée : à déclarer après la socket, pour qu'il le soit avant
+    /// que la socket ne se ferme et que son numéro ne puisse servir à une autre.
+    fn register(&self, stream: &TcpStream) -> Registration<'_> {
         let id = self.next_socket.fetch_add(1, Ordering::Relaxed);
-        lock(&self.sockets).insert(id, clone);
-        Some(id)
-    }
-
-    fn unregister(&self, id: Option<u64>) {
-        if let Some(id) = id {
-            lock(&self.sockets).remove(&id);
-        }
+        lock(&self.sockets).insert(id, stream.as_raw_fd());
+        Registration { shared: self, id }
     }
 
     /// Compte `amount` octets pour cet appareil et attend ce que les plafonds imposent.
@@ -472,8 +483,12 @@ impl Relay {
     pub fn stop(&mut self) {
         self.shared.stop.store(true, Ordering::Relaxed);
         self.shared.pause.wake();
-        for socket in lock(&self.shared.sockets).values() {
-            let _ = socket.shutdown(Shutdown::Both);
+        for &descriptor in lock(&self.shared.sockets).values() {
+            // SAFETY : un numéro inscrit désigne une socket encore ouverte ; il est retiré
+            // avant sa fermeture, sous ce même verrou.
+            unsafe {
+                libc::shutdown(descriptor, libc::SHUT_RDWR);
+            }
         }
         if let Some(accept) = self.accept.take() {
             // Le fil d'accueil attend une connexion : une connexion locale le réveille, il
@@ -526,13 +541,12 @@ fn accept_loop(shared: &Arc<Shared>, listener: &TcpListener) {
 }
 
 fn serve(shared: &Arc<Shared>, mut client: TcpStream, peer: SocketAddr) {
-    let id = shared.register(&client);
+    let _registration = shared.register(&client);
     shared.connection_opened(peer.ip());
     let _ = client.set_nodelay(true);
     let _ = handle(shared, &mut client, peer.ip());
     let _ = client.shutdown(Shutdown::Both);
     shared.connection_closed(peer.ip());
-    shared.unregister(id);
 }
 
 // MARK: Les protocoles
@@ -807,9 +821,9 @@ impl Progress {
 /// Relaie dans les deux sens, en plafonnant chacun, jusqu'à la fin de l'échange.
 ///
 /// Les deux fils se partagent les deux sockets par référence (`&TcpStream` sait lire et
-/// écrire) : aucune n'est dupliquée. Une connexion relayée garde ainsi quatre descripteurs
-/// (l'appareil, le site, et la copie de chacun gardée pour l'arrêt du relais) au lieu de
-/// neuf, loin de la limite qu'iOS fixe aux descripteurs ouverts d'une app.
+/// écrire) : aucune n'est dupliquée. Une connexion relayée garde ainsi deux descripteurs,
+/// l'appareil et le site, au lieu de neuf, loin de la limite qu'iOS fixe aux descripteurs
+/// ouverts d'une app.
 fn tunnel(
     shared: &Arc<Shared>,
     client: &mut TcpStream,
@@ -818,7 +832,7 @@ fn tunnel(
 ) -> io::Result<()> {
     client.set_read_timeout(None)?;
     let _ = upstream.set_nodelay(true);
-    let upstream_id = shared.register(&upstream);
+    let _registration = shared.register(&upstream);
     let progress = Progress::new();
     let (client, upstream): (&TcpStream, &TcpStream) = (client, &upstream);
 
@@ -851,7 +865,6 @@ fn tunnel(
         let _ = uploader.join();
         Ok(())
     });
-    shared.unregister(upstream_id);
     relayed
 }
 

@@ -51,8 +51,8 @@ fn a_relayed_connection_costs_few_descriptors() {
     }
     let per_tunnel = (during - before) as f64 / TUNNELS as f64;
     // Par tunnel : la socket du test et celle que le serveur garde (2), puis, pour le
-    // relais, le client et le serveur et leur copie gardée pour l'arrêt du relais (4).
+    // relais, l'appareil et le site (2), sans aucune copie.
     eprintln!("{per_tunnel} descripteurs par tunnel");
-    assert!(per_tunnel <= 6.0, "{per_tunnel} descripteurs par tunnel");
+    assert!(per_tunnel <= 4.0, "{per_tunnel} descripteurs par tunnel");
     drop(tunnels);
 }
