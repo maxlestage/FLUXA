@@ -276,6 +276,7 @@ async fn the_optimisations_are_the_apps() {
         "de 2 à 64 Ko",
         "après 3 s",
         "relus au plus toutes les 5 s, et non à chaque connexion",
+        "en trois allocations, qu’il y ait trois appareils ou treize",
         "dort jusqu’à elle, sans se réveiller en boucle",
         "toutes les 5 s au tableau de bord, toutes les 10 s ailleurs",
         "au plus toutes les 10 s",
@@ -338,6 +339,8 @@ async fn the_optimisations_are_the_apps() {
         "self.shared.pause.wake();",
         "NETWORKS_TTL: Duration = Duration::from_secs(5)",
         "self.networks.allows(peer)",
+        "assert_eq!(few, 3,",
+        "assert_eq!(many, 3,",
     ] {
         assert!(relay.contains(constant), "{constant}");
     }
