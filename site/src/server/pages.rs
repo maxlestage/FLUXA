@@ -273,7 +273,7 @@ const OPTIMISATIONS: [(&str, &str, &str, &str); 8] = [
     (
         "o-releves",
         "Relevés à la demande",
-        "L’état du relais est relevé chaque seconde quand son écran est affiché, toutes les 5 s au tableau de bord, toutes les 10 s ailleurs : le rythme de l’activité en direct, qui se met à jour au plus toutes les 10 s. L’historique et le diagnostic ne se relisent que s’ils sont affichés, le tableau de bord ne suit la mesure de chaque seconde, et ne recopie la courbe de la dernière minute, que s’il est affiché, et l’onglet Partage ne suit l’état du partage, qui change chaque seconde, que s’il est affiché.",
+        "L’état du relais est relevé chaque seconde quand son écran est affiché, toutes les 5 s au tableau de bord, toutes les 10 s ailleurs : le rythme de l’activité en direct, qui se met à jour au plus toutes les 10 s. L’historique et le diagnostic ne se relisent que s’ils sont affichés, le tableau de bord ne suit la mesure de chaque seconde, et ne recopie la courbe de la dernière minute, que s’il est affiché, et l’onglet Partage ne suit l’état du partage, qui change chaque seconde, que s’il est affiché. Les réglages ne suivent que le volume du forfait, pas son usage relevé toutes les 10 s.",
         "1 s · 5 s · 10 s",
     ),
     (

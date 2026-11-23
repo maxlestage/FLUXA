@@ -727,6 +727,16 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(reads, 1)
     }
 
+    func testTheSettingsFollowOnlyThePlanAllowance() {
+        XCTAssertNil(AppModel.allowance(of: nil), "sans forfait, rien")
+        // L'usage change à chaque relevé ; le volume, que montrent les réglages, ne bouge pas.
+        let before = planStatus(used: 1_000_000_000)
+        let after = planStatus(used: 1_400_000_000)
+        XCTAssertNotEqual(before, after)
+        XCTAssertEqual(AppModel.allowance(of: before), 50_000_000_000)
+        XCTAssertEqual(AppModel.allowance(of: after), AppModel.allowance(of: before))
+    }
+
     func testTheHiddenDashboardDoesNotReadTheLiveMeasure() {
         var reads = 0
         func live() -> Int {
