@@ -267,7 +267,7 @@ const OPTIMISATIONS: [(&str, &str, &str, &str); 8] = [
     (
         "o-rust",
         "Un relais écrit en Rust",
-        "Au plus 192 connexions, des fils légers de 256 Ko de pile, des lectures taillées sur le plafond, de 2 à 64 Ko. Chaque sens d’une connexion part d’un tampon de 4 Ko, qui ne double, jusqu’à 64 Ko, que quand une lecture le remplit. Une adresse qui ne répond pas cède la place après 3 s. Les réseaux du partage sont relus au plus toutes les 5 s, et non à chaque connexion d’un appareil. Un fil qui attend la fin d’une réponse dort jusqu’à elle, sans se réveiller en boucle. Sous un plafond, un fil qui attend son tour dort d’un trait jusqu’à l’échéance, au lieu de se réveiller toutes les 100 ms ; sans plafond, il n’attend pas.",
+        "Au plus 192 connexions, des fils légers de 256 Ko de pile, des lectures taillées sur le plafond, de 2 à 64 Ko. Chaque sens d’une connexion part d’un tampon de 4 Ko, qui ne double, jusqu’à 64 Ko, que quand une lecture le remplit. Une adresse qui ne répond pas cède la place après 3 s. Les réseaux du partage sont relus au plus toutes les 5 s, et non à chaque connexion d’un appareil. L’état du relais s’écrit d’un trait, en trois allocations, qu’il y ait trois appareils ou treize. Un fil qui attend la fin d’une réponse dort jusqu’à elle, sans se réveiller en boucle. Sous un plafond, un fil qui attend son tour dort d’un trait jusqu’à l’échéance, au lieu de se réveiller toutes les 100 ms ; sans plafond, il n’attend pas.",
         "Rust · ABI C",
     ),
     (
