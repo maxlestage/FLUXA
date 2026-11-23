@@ -214,10 +214,10 @@ final class AppModel {
         bootTime = InterfaceCounters.bootTime()
         engine.start()
         pathMonitor.start { [weak self] details in
-            guard let self else { return }
+            guard let self, Self.pathChanged(from: self.path, to: details) else { return }
             self.path = details
             self.engine.updatePath(kind: details.kind, isOnline: details.isOnline)
-            self.snapshot = self.engine.snapshot
+            self.set(\.snapshot, self.engine.snapshot)
         }
         if relayEnabled {
             Task { await resumeRelay() }
@@ -231,6 +231,13 @@ final class AppModel {
                 try? await Task.sleep(until: deadline, tolerance: Self.sampleTolerance, clock: clock)
             }
         }
+    }
+
+    /// Si un avis du système change ce que l'app montre du réseau. iOS avertit aussi quand
+    /// changent des détails que l'app ne montre pas (adresses, passerelles, serveurs DNS) :
+    /// ces avis-là ne réécrivent rien, et rien ne se redessine pour eux.
+    static func pathChanged(from current: PathDetails, to new: PathDetails) -> Bool {
+        current != new
     }
 
     /// La marge laissée à iOS sur le réveil de chaque seconde : 100 ms, le dixième de
