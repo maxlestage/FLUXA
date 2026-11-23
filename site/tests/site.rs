@@ -285,6 +285,7 @@ async fn the_optimisations_are_the_apps() {
         "le tableau de bord ne suit la mesure de chaque seconde, et ne recopie la courbe de la dernière minute, que s’il est affiché",
         "l’onglet Partage ne suit l’état du partage, qui change chaque seconde, que s’il est affiché",
         "Les réglages ne suivent que le volume du forfait, pas son usage relevé toutes les 10 s",
+        "Un avis d’iOS sur le réseau qui ne change rien de ce que l’app en montre ne réécrit rien",
         "laisse 100 ms de marge à iOS",
         "écartées sur leur nom brut, sans rien copier",
         "dort d’un trait jusqu’à l’échéance, au lieu de se réveiller toutes les 100 ms",
@@ -305,6 +306,9 @@ async fn the_optimisations_are_the_apps() {
     );
     assert!(!read("App/Features/DashboardView.swift").contains("model.snapshot"));
     assert!(model.contains("if ticks % 10 == 0 {\n            set(\\.plan, engine.planStatus())"));
+    assert!(model.contains(
+        "guard let self, Self.pathChanged(from: self.path, to: details) else { return }"
+    ));
     let settings = read("App/Features/SettingsView.swift");
     assert!(settings.contains("model.planAllowanceBytes") && !settings.contains("model.plan."));
     assert!(
