@@ -277,6 +277,7 @@ async fn the_optimisations_are_the_apps() {
         "après 3 s",
         "relus au plus toutes les 5 s, et non à chaque connexion",
         "en trois allocations, qu’il y ait trois appareils ou treize",
+        "puis va au décodeur de l’app sans détour par une chaîne, et un décodeur gardé le lit",
         "dort jusqu’à elle, sans se réveiller en boucle",
         "toutes les 5 s au tableau de bord, toutes les 10 s ailleurs",
         "au plus toutes les 10 s",
@@ -309,6 +310,14 @@ async fn the_optimisations_are_the_apps() {
     assert!(model.contains(
         "guard let self, Self.pathChanged(from: self.path, to: details) else { return }"
     ));
+    let bridge = read("App/Services/RelayBridge.swift");
+    assert!(bridge.contains("RelayStatus.decode(Data(bytes: pointer, count: strlen(pointer)))"));
+    assert!(bridge.contains("static let decoder = JSONDecoder()"));
+    assert!(!bridge.contains("convertFromSnakeCase"));
+    assert!(
+        read("RelayExtension/PacketTunnelProvider.swift")
+            .contains("Data(bytes: pointer, count: strlen(pointer))")
+    );
     let settings = read("App/Features/SettingsView.swift");
     assert!(settings.contains("model.planAllowanceBytes") && !settings.contains("model.plan."));
     assert!(

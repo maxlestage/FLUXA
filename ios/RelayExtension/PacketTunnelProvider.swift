@@ -49,7 +49,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         guard let pointer = fluxa_relay_status() else { return nil }
         defer { fluxa_shaper_free(pointer) }
-        return Data(String(cString: pointer).utf8)
+        // Une seule copie, sans passer par une chaîne Swift.
+        return Data(bytes: pointer, count: strlen(pointer))
     }
 
     /// Applique un message de plafonds : le plafond global, puis celui de chaque appareil

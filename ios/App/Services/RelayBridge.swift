@@ -36,7 +36,8 @@ enum RelayBridge {
     static func status() -> RelayStatus? {
         guard let pointer = fluxa_relay_status() else { return nil }
         defer { fluxa_shaper_free(pointer) }
-        return RelayStatus.decode(String(cString: pointer))
+        // Une seule copie : les octets du relais vont droit au décodeur.
+        return RelayStatus.decode(Data(bytes: pointer, count: strlen(pointer)))
     }
 }
 
@@ -52,6 +53,15 @@ struct RelayStatus: Decodable, Equatable {
         let uploadLimit: UInt64
 
         var id: String { address }
+
+        enum CodingKeys: String, CodingKey {
+            case address, connections
+            case toDeviceBytes = "to_device_bytes"
+            case fromDeviceBytes = "from_device_bytes"
+            case idleSeconds = "idle_seconds"
+            case downloadLimit = "download_limit"
+            case uploadLimit = "upload_limit"
+        }
     }
 
     let running: Bool
@@ -64,10 +74,24 @@ struct RelayStatus: Decodable, Equatable {
     let addresses: [String]?
     let clients: [Client]?
 
+    enum CodingKeys: String, CodingKey {
+        case running, port, addresses, clients
+        case activeConnections = "active_connections"
+        case maxConnections = "max_connections"
+        case downloadLimit = "download_limit"
+        case uploadLimit = "upload_limit"
+    }
+
+    /// Le décodeur, gardé d'un relevé à l'autre. Les clés du relais sont écrites une fois
+    /// pour toutes : aucune n'est convertie à la volée à chaque relevé.
+    static let decoder = JSONDecoder()
+
+    static func decode(_ data: Data) -> RelayStatus? {
+        try? decoder.decode(RelayStatus.self, from: data)
+    }
+
     static func decode(_ json: String) -> RelayStatus? {
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try? decoder.decode(RelayStatus.self, from: Data(json.utf8))
+        decode(Data(json.utf8))
     }
 
     /// L'adresse à donner aux appareils : celle du pont du partage, ou l'adresse habituelle.
