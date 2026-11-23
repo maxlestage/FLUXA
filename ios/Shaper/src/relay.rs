@@ -553,14 +553,13 @@ fn serve(shared: &Arc<Shared>, mut client: TcpStream, peer: SocketAddr) {
 
 fn handle(shared: &Arc<Shared>, client: &mut TcpStream, peer: IpAddr) -> io::Result<()> {
     client.set_read_timeout(Some(Duration::from_secs(30)))?;
-    let head = read_head(client)?;
+    let (head, end) = read_head(client)?;
     if head.first() == Some(&5) {
         return socks5(shared, client, peer, head);
     }
-    let end = find(&head, b"\r\n\r\n")
-        .map(|index| index + 4)
-        .ok_or(io::ErrorKind::InvalidData)?;
-    let text = String::from_utf8_lossy(&head[..end]).into_owned();
+    let end = end.ok_or(io::ErrorKind::InvalidData)?;
+    // Un en-tête en UTF-8 valide (le cas courant) est lu tel quel, sans copie.
+    let text = String::from_utf8_lossy(&head[..end]);
     let rest = &head[end..];
     let mut lines = text.split("\r\n");
     let request = lines.next().unwrap_or_default();
@@ -964,7 +963,9 @@ fn lowest_rate(first: u64, second: u64) -> u64 {
     }
 }
 
-fn read_head(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+/// Lit l'en-tête d'une requête, et sa fin (juste après la ligne vide) pour HTTP. SOCKS5 se
+/// reconnaît à son premier octet et n'a pas de fin à chercher.
+fn read_head(stream: &mut TcpStream) -> io::Result<(Vec<u8>, Option<usize>)> {
     let mut head = Vec::with_capacity(1024);
     let mut buffer = [0u8; 4096];
     loop {
@@ -972,14 +973,26 @@ fn read_head(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
         if count == 0 {
             return Err(io::ErrorKind::UnexpectedEof.into());
         }
+        let scanned = head.len();
         head.extend_from_slice(&buffer[..count]);
-        if head[0] == 5 || find(&head, b"\r\n\r\n").is_some() {
-            return Ok(head);
+        if head[0] == 5 {
+            return Ok((head, None));
+        }
+        if let Some(end) = head_end(&head, scanned) {
+            return Ok((head, Some(end)));
         }
         if head.len() > 65_536 {
             return Err(io::ErrorKind::InvalidData.into());
         }
     }
+}
+
+/// La fin de l'en-tête (juste après « \r\n\r\n »), cherchée dans les seuls octets arrivés
+/// depuis `scanned`, et les trois d'avant où la ligne vide a pu commencer : un en-tête reçu
+/// par petits morceaux n'est pas relu en entier à chaque morceau.
+fn head_end(head: &[u8], scanned: usize) -> Option<usize> {
+    let start = scanned.saturating_sub(3);
+    find(&head[start..], b"\r\n\r\n").map(|index| start + index + 4)
 }
 
 fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
@@ -1670,6 +1683,35 @@ mod tests {
             sizes.push(buffer.capacity());
         }
         assert_eq!(sizes, [8, 16, 32, 64, 64, 64].map(|kilo| kilo * 1024));
+    }
+
+    #[test]
+    fn a_head_in_small_pieces_is_scanned_once() {
+        let mut request = b"GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n".to_vec();
+        while request.len() < 4_000 {
+            request.extend_from_slice(b"X-Filler: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\n");
+        }
+        request.extend_from_slice(b"\r\nbody");
+        let expected = request.len() - 4;
+        // Un octet à la fois : la ligne vide se trouve, même coupée entre deux morceaux.
+        let mut head = Vec::new();
+        let mut examined = 0;
+        let mut found = None;
+        for byte in &request {
+            let scanned = head.len();
+            head.push(*byte);
+            examined += head.len() - scanned.saturating_sub(3);
+            if let Some(end) = head_end(&head, scanned) {
+                found = Some(end);
+                break;
+            }
+        }
+        assert_eq!(found, Some(expected));
+        // Au plus quatre octets regardés par octet reçu, et non tout l'en-tête à chaque fois
+        // (plus de huit millions pour 4 Ko).
+        assert!(examined <= 4 * expected, "{examined} octets examinés");
+        assert_eq!(head_end(b"GET / HTTP/1.1\r\n\r\n", 0), Some(18));
+        assert_eq!(head_end(b"GET / HTTP/1.1\r\n", 0), None);
     }
 
     #[test]
