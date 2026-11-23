@@ -41,7 +41,17 @@ final class AppModel {
     /// Ce qui a été échangé pendant que l'app ne mesurait pas, à la dernière reprise.
     private(set) var absence: AbsenceUsage?
     /// Le forfait mobile et son état. `nil` : pas de forfait réglé.
-    private(set) var plan: PlanStatus?
+    private(set) var plan: PlanStatus? {
+        didSet { set(\.planAllowanceBytes, Self.allowance(of: plan)) }
+    }
+    /// Le volume du forfait seul, pour les écrans qui ne montrent que lui : il ne change que
+    /// si l'utilisateur règle son forfait, alors que `plan` change à chaque relevé du forfait
+    /// (toutes les 10 s sur réseau mobile). Ces écrans ne se recalculent pas pour rien.
+    private(set) var planAllowanceBytes: UInt64?
+
+    static func allowance(of status: PlanStatus?) -> UInt64? {
+        status?.plan.allowanceBytes
+    }
     /// L'intervalle entre deux sondes de latence, en secondes.
     private(set) var probeInterval = AppModel.probeIntervals.normal
     /// L'état du relais de partage, relevé chaque seconde quand il est ouvert.
@@ -154,6 +164,8 @@ final class AppModel {
         devices = engine.devices
         sharingSessions = engine.sharingSessions(limit: Self.sharingSessionLimit)
         plan = engine.planStatus()
+        // Dans l'initialiseur, `didSet` ne suit pas forcément : le volume est réglé ici aussi.
+        planAllowanceBytes = Self.allowance(of: plan)
         snapshot = engine.snapshot
         // Un souci à l'ouverture de la base est dit dès le premier écran.
         errorMessage = opened.problem
