@@ -727,6 +727,16 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(reads, 1)
     }
 
+    func testTheSpeedTestDataIsDrawnByWords() {
+        let block = SpeedTestRunner.randomBlock(bytes: 65_536)
+        XCTAssertEqual(block.count, 65_536)
+        XCTAssertNotEqual(block, SpeedTestRunner.randomBlock(bytes: 65_536), "deux tirages diffèrent")
+        // Assez varié pour ne pas être compressé en route : presque toutes les valeurs d'octet.
+        XCTAssertGreaterThan(Set(block).count, 250)
+        XCTAssertEqual(SpeedTestRunner.randomBlock(bytes: 13).count, 13)
+        XCTAssertEqual(SpeedTestRunner.testData(megabytes: 1).count, 1_048_576)
+    }
+
     func testTheSpeedTestStopsAtTheVolumeItAnnounces() {
         // 200 Mo en réception, par morceaux de 64 Ko : le volume compte à chaque morceau.
         var budget = TransferBudget(limit: 200_000_000)
