@@ -727,6 +727,17 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(reads, 1)
     }
 
+    func testAPathNoticeThatChangesNothingShownIsIgnored() {
+        let wifi = PathDetails(kind: .wifi, isOnline: true)
+        // Une nouvelle adresse ou un autre serveur DNS : le même chemin pour l'app.
+        XCTAssertFalse(AppModel.pathChanged(from: wifi, to: PathDetails(kind: .wifi, isOnline: true)))
+        XCTAssertTrue(AppModel.pathChanged(from: wifi, to: PathDetails(kind: .cellular, isOnline: true, radio: "5G")))
+        XCTAssertTrue(AppModel.pathChanged(from: wifi, to: PathDetails(kind: .wifi, isOnline: true, isConstrained: true)))
+        XCTAssertTrue(AppModel.pathChanged(from: wifi, to: PathDetails()), "hors ligne")
+        let fiveG = PathDetails(kind: .cellular, isOnline: true, isExpensive: true, radio: "5G")
+        XCTAssertTrue(AppModel.pathChanged(from: fiveG, to: PathDetails(kind: .cellular, isOnline: true, isExpensive: true, radio: "4G")))
+    }
+
     func testTheSettingsFollowOnlyThePlanAllowance() {
         XCTAssertNil(AppModel.allowance(of: nil), "sans forfait, rien")
         // L'usage change à chaque relevé ; le volume, que montrent les réglages, ne bouge pas.
