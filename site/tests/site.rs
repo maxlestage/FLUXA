@@ -283,6 +283,7 @@ async fn the_optimisations_are_the_apps() {
         "sous 20 % de batterie",
         "ne se relisent que s’ils sont affichés",
         "n’est recopiée chaque seconde que tableau de bord affiché",
+        "l’onglet Partage ne suit l’état du partage, qui change chaque seconde, que s’il est affiché",
         "laisse 100 ms de marge à iOS",
         "écartées sur leur nom brut, sans rien copier",
         "dort d’un trait jusqu’à l’échéance, au lieu de se réveiller toutes les 100 ms",
@@ -298,6 +299,10 @@ async fn the_optimisations_are_the_apps() {
     assert!(model.contains("sampleTolerance: Duration = .milliseconds(100)"));
     assert!(model.contains("tolerance: Self.sampleTolerance"));
     assert!(model.contains("if Self.followsLiveChart(dashboardVisible: dashboardVisible) {"));
+    assert!(
+        read("App/Features/HotspotGuideView.swift")
+            .contains("HotspotGuideView.watched(model.sharing, visible: visible)")
+    );
     let store = read("FluxaCore/Sources/FluxaCore/SQLiteStore.swift");
     assert!(store.contains("let statement = try database.statement(upsert)"));
     assert!(
