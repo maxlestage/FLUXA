@@ -20,6 +20,12 @@ struct HotspotGuideView: View {
         .hotspotActivation, .hotspotClientDiscovery, .hotspotLimit, .perDeviceShaping, .clientDisconnect,
     ]
 
+    /// L'état que la section suit : le vrai si elle est affichée, aucun sinon. Le lire abonne
+    /// la vue à ses changements ; ne pas le lire l'en désabonne.
+    static func watched<Value>(_ value: @autoclosure () -> Value?, visible: Bool) -> Value? {
+        visible ? value() : nil
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -55,24 +61,7 @@ struct HotspotGuideView: View {
                     .accessibilityIdentifier("lien-relais")
                 }
 
-                Section {
-                    LabeledContent("État") {
-                        if model.sharingDetected {
-                            StatusPill(.supported, "Détecté")
-                        } else {
-                            StatusPill(.guide, "Non détecté")
-                        }
-                    }
-                    if let sharing = model.sharing {
-                        ValueRow("Durée", Format.span(sharing.session.duration))
-                        ValueRow("Vers les appareils", Format.rate(sharing.toDevicesBps))
-                        ValueRow("Depuis les appareils", Format.rate(sharing.fromDevicesBps))
-                        ValueRow("Envoyé aux appareils", Format.bytes(sharing.session.toDevicesBytes))
-                        ValueRow("Reçu des appareils", Format.bytes(sharing.session.fromDevicesBytes))
-                    }
-                } footer: {
-                    Text("iOS ne dit pas à une app si le partage est actif. FLUXA le déduit de l’interface réseau que le système crée pour les appareils reliés, et y lit le trafic de tous les appareils ensemble. Ce signe peut manquer, par exemple tant qu’aucun appareil n’est connecté.")
-                }
+                SharingStateSection()
 
                 if !model.sharingSessions.isEmpty {
                     Section {
@@ -157,5 +146,37 @@ struct HotspotGuideView: View {
             .fluxaBackground()
             .navigationTitle("Partage")
         }
+    }
+}
+
+/// L'état du partage en cours. Pendant un partage, il change chaque seconde : la section ne
+/// le suit que tant qu'elle est affichée, pour que l'onglet caché derrière un autre ne soit
+/// pas recalculé chaque seconde. En réapparaissant, elle reprend l'état du moment.
+private struct SharingStateSection: View {
+    @Environment(AppModel.self) private var model
+    @State private var visible = false
+
+    var body: some View {
+        let sharing = HotspotGuideView.watched(model.sharing, visible: visible)
+        Section {
+            LabeledContent("État") {
+                if sharing != nil {
+                    StatusPill(.supported, "Détecté")
+                } else {
+                    StatusPill(.guide, "Non détecté")
+                }
+            }
+            if let sharing {
+                ValueRow("Durée", Format.span(sharing.session.duration))
+                ValueRow("Vers les appareils", Format.rate(sharing.toDevicesBps))
+                ValueRow("Depuis les appareils", Format.rate(sharing.fromDevicesBps))
+                ValueRow("Envoyé aux appareils", Format.bytes(sharing.session.toDevicesBytes))
+                ValueRow("Reçu des appareils", Format.bytes(sharing.session.fromDevicesBytes))
+            }
+        } footer: {
+            Text("iOS ne dit pas à une app si le partage est actif. FLUXA le déduit de l’interface réseau que le système crée pour les appareils reliés, et y lit le trafic de tous les appareils ensemble. Ce signe peut manquer, par exemple tant qu’aucun appareil n’est connecté.")
+        }
+        .onAppear { visible = true }
+        .onDisappear { visible = false }
     }
 }
