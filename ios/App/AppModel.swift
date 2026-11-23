@@ -447,6 +447,9 @@ final class AppModel {
     /// sonde ne tourne que là, et sonde dès qu'il réapparaît.
     var dashboardVisible = false {
         didSet {
+            if !dashboardVisible, oldValue {
+                hiddenSnapshot = snapshot
+            }
             if dashboardVisible, !oldValue {
                 // La courbe, laissée en l'état pendant l'absence, reprend la dernière minute.
                 set(\.samples, engine.recentSamples)
@@ -455,6 +458,20 @@ final class AppModel {
                 }
             }
         }
+    }
+
+    /// La mesure que montre le tableau de bord : en direct quand il est affiché ; caché, la
+    /// dernière qu'il a montrée, qui ne l'abonne pas au relevé de chaque seconde.
+    var dashboardSnapshot: NetworkSnapshot {
+        Self.shown(snapshot, hidden: hiddenSnapshot, visible: dashboardVisible)
+    }
+
+    @ObservationIgnored private var hiddenSnapshot = NetworkSnapshot()
+
+    /// La valeur en direct si l'écran est affiché, sinon celle gardée, sans lire la valeur en
+    /// direct : la lire abonnerait l'écran à ses changements.
+    static func shown<Value>(_ live: @autoclosure () -> Value, hidden: Value, visible: Bool) -> Value {
+        visible ? live() : hidden
     }
 
     /// La courbe en direct n'est montrée qu'au tableau de bord : ailleurs, sa fenêtre d'une

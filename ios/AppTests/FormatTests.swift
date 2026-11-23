@@ -727,6 +727,19 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(reads, 1)
     }
 
+    func testTheHiddenDashboardDoesNotReadTheLiveMeasure() {
+        var reads = 0
+        func live() -> Int {
+            reads += 1
+            return 2
+        }
+        XCTAssertEqual(AppModel.shown(live(), hidden: 1, visible: true), 2)
+        XCTAssertEqual(reads, 1)
+        // Caché, le tableau de bord garde la dernière mesure, sans lire celle de la seconde.
+        XCTAssertEqual(AppModel.shown(live(), hidden: 1, visible: false), 1)
+        XCTAssertEqual(reads, 1)
+    }
+
     func testTheLiveChartIsFollowedOnlyOnTheDashboard() {
         XCTAssertTrue(AppModel.followsLiveChart(dashboardVisible: true))
         XCTAssertFalse(AppModel.followsLiveChart(dashboardVisible: false), "ailleurs, la courbe n'est pas recopiée")

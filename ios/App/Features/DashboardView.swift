@@ -55,7 +55,7 @@ private struct StatusLine: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            if model.snapshot.isOnline {
+            if model.dashboardSnapshot.isOnline {
                 StatusPill(.supported, "Connecté")
             } else {
                 StatusPill(.reserved, "Hors ligne")
@@ -64,7 +64,7 @@ private struct StatusLine: View {
                 .font(.subheadline)
                 .foregroundStyle(Theme.secondary)
             Spacer()
-            Text(model.snapshot.isMonitoring ? "Mesure active" : "Mesure arrêtée")
+            Text(model.dashboardSnapshot.isMonitoring ? "Mesure active" : "Mesure arrêtée")
                 .font(.caption.monospaced())
                 .foregroundStyle(Theme.tertiary)
         }
@@ -77,7 +77,7 @@ private struct ThroughputHeader: View {
     @ScaledMetric(relativeTo: .largeTitle) private var headline: CGFloat = 64
 
     var body: some View {
-        let down = Format.rateParts(model.snapshot.downloadBps)
+        let down = Format.rateParts(model.dashboardSnapshot.downloadBps)
         VStack(alignment: .leading, spacing: 6) {
             Eyebrow("Débit descendant")
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -91,7 +91,7 @@ private struct ThroughputHeader: View {
                     .font(.title3.monospaced())
                     .foregroundStyle(Theme.secondary)
             }
-            Text("↑ \(Format.rate(model.snapshot.uploadBps)) montant")
+            Text("↑ \(Format.rate(model.dashboardSnapshot.uploadBps)) montant")
                 .font(.subheadline.monospaced())
                 .foregroundStyle(Theme.up)
         }
@@ -193,7 +193,7 @@ private struct MeasureTiles: View {
     }
 
     var body: some View {
-        let snapshot = model.snapshot
+        let snapshot = model.dashboardSnapshot
         LazyVGrid(columns: columns, spacing: 12) {
             Tile("Latence", Format.milliseconds(snapshot.latencyMs))
             Tile("Gigue", Format.milliseconds(snapshot.jitterMs))
