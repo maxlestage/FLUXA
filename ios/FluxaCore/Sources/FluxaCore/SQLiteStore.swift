@@ -344,7 +344,7 @@ public final class SQLiteStore: EngineStore {
             SELECT step, start, measured_seconds, received_bytes, sent_bytes,
                    peak_download_bps, peak_upload_bps, sample_count FROM usage_records
             """
-        ) { row -> (UsageKey, Bucket) in
+        ) { row -> (String, Bucket) in
             var bucket = Bucket(start: row.date(1))
             bucket.measuredSeconds = row.real(2)
             bucket.receivedBytes = row.unsigned(3)
@@ -352,8 +352,11 @@ public final class SQLiteStore: EngineStore {
             bucket.peakDownloadBps = row.real(5)
             bucket.peakUploadBps = row.real(6)
             bucket.sampleCount = row.int(7)
-            return (UsageKey(step: row.text(0), start: row.real(1)), bucket)
-        }.forEach { contents.usage[$0.0] = $0.1 }
+            return (row.text(0), bucket)
+        }.forEach { contents.usage[$0.0, default: []].append($0.1) }
+        for step in contents.usage.keys {
+            contents.usage[step]?.sort { $0.start < $1.start }
+        }
 
         let policies = try database.rows(
             "SELECT seq, result_json FROM policy_applications ORDER BY seq"
@@ -550,27 +553,61 @@ public final class SQLiteStore: EngineStore {
     }
 
     private func writeUsage(_ old: StoredContents, _ new: StoredContents) throws {
-        try sync(
-            old.usage, new.usage,
-            delete: "DELETE FROM usage_records WHERE step = ? AND start = ?",
-            upsert: """
-                INSERT INTO usage_records (step, start, measured_seconds, received_bytes, sent_bytes,
-                    peak_download_bps, peak_upload_bps, sample_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(step, start) DO UPDATE SET measured_seconds = excluded.measured_seconds,
-                    received_bytes = excluded.received_bytes, sent_bytes = excluded.sent_bytes,
-                    peak_download_bps = excluded.peak_download_bps,
-                    peak_upload_bps = excluded.peak_upload_bps, sample_count = excluded.sample_count
-                """,
-            key: { [.text($0.step), .real($0.start)] },
-            row: { key, bucket in
-                [
-                    .text(key.step), .real(key.start), .real(bucket.measuredSeconds),
-                    .unsigned(bucket.receivedBytes), .unsigned(bucket.sentBytes),
-                    .real(bucket.peakDownloadBps), .real(bucket.peakUploadBps),
-                    .integer(bucket.sampleCount),
-                ]
-            })
+        guard old.usage != new.usage else { return }
+        let delete = "DELETE FROM usage_records WHERE step = ? AND start = ?"
+        let upsert = """
+            INSERT INTO usage_records (step, start, measured_seconds, received_bytes, sent_bytes,
+                peak_download_bps, peak_upload_bps, sample_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(step, start) DO UPDATE SET measured_seconds = excluded.measured_seconds,
+                received_bytes = excluded.received_bytes, sent_bytes = excluded.sent_bytes,
+                peak_download_bps = excluded.peak_download_bps,
+                peak_upload_bps = excluded.peak_upload_bps, sample_count = excluded.sample_count
+            """
+        for step in Set(old.usage.keys).union(new.usage.keys) {
+            let changes = Self.changes(from: old.usage[step] ?? [], to: new.usage[step] ?? [])
+            if !changes.removed.isEmpty {
+                let statement = try database.statement(delete)
+                for start in changes.removed {
+                    try statement.run([.text(step), .date(start)])
+                }
+            }
+            if !changes.changed.isEmpty {
+                let statement = try database.statement(upsert)
+                for bucket in changes.changed {
+                    try statement.run([
+                        .text(step), .date(bucket.start), .real(bucket.measuredSeconds),
+                        .unsigned(bucket.receivedBytes), .unsigned(bucket.sentBytes),
+                        .real(bucket.peakDownloadBps), .real(bucket.peakUploadBps),
+                        .integer(bucket.sampleCount),
+                    ])
+                }
+            }
+        }
+    }
+
+    /// Ce qui sépare deux suites triées par début, d'un seul parcours des deux : les débuts
+    /// disparus, et les périodes nouvelles ou modifiées.
+    static func changes(from old: [Bucket], to new: [Bucket]) -> (removed: [Date], changed: [Bucket]) {
+        var removed: [Date] = []
+        var changed: [Bucket] = []
+        var (i, j) = (0, 0)
+        while i < old.count || j < new.count {
+            if j == new.count || (i < old.count && old[i].start < new[j].start) {
+                removed.append(old[i].start)
+                i += 1
+            } else if i == old.count || new[j].start < old[i].start {
+                changed.append(new[j])
+                j += 1
+            } else {
+                if old[i] != new[j] {
+                    changed.append(new[j])
+                }
+                i += 1
+                j += 1
+            }
+        }
+        return (removed, changed)
     }
 
     private func writePolicyLog(_ old: StoredContents, _ new: StoredContents) throws -> [Int64] {
@@ -785,12 +822,6 @@ struct Positioned<Value: Equatable>: Equatable {
     var value: Value
 }
 
-/// La clé d'un agrégat : son pas et son début.
-struct UsageKey: Hashable {
-    var step: String
-    var start: Double
-}
-
 /// La clé d'un volume par réseau : son pas, son début et la famille d'interfaces.
 struct NetworkUsageKey: Hashable {
     var step: String
@@ -802,7 +833,10 @@ struct NetworkUsageKey: Hashable {
 struct StoredContents: Equatable {
     var settings: [String: String] = [:]
     var profiles: [String: Positioned<Profile>] = [:]
-    var usage: [UsageKey: Bucket] = [:]
+    /// Les agrégats, par pas (`minute`, `hour`, `day`), triés par début : les suites mêmes
+    /// du moteur, gardées sans copie. Un enregistrement les compare d'un seul parcours, au
+    /// lieu de ranger chaque période, jusqu'à 11 000, dans une table à clés.
+    var usage: [String: [Bucket]] = [:]
     var policyLog: [ApplyResult] = []
     var rules: [String: Positioned<AutomationRule>] = [:]
     var activations: [String: Positioned<RuleActivation>] = [:]
@@ -861,11 +895,8 @@ struct StoredContents: Equatable {
         let series: [(HistoryStep, BucketSeries)] = [
             (.minute, state.minutes), (.hour, state.hours), (.day, state.days),
         ]
-        for (step, buckets) in series {
-            for bucket in buckets.buckets {
-                let key = UsageKey(step: step.rawValue, start: bucket.start.timeIntervalSinceReferenceDate)
-                usage[key] = bucket
-            }
+        for (step, buckets) in series where buckets.count > 0 {
+            usage[step.rawValue] = buckets.buckets
         }
         let networks: [(HistoryStep, NetworkSeries)] = [(.hour, state.networkHours), (.day, state.networkDays)]
         for (step, series) in networks {
@@ -935,7 +966,7 @@ struct StoredContents: Equatable {
         state.speedTests = speedTests.values.sorted { $0.date > $1.date }
 
         let buckets = { (step: HistoryStep) in
-            BucketSeries(buckets: usage.filter { $0.key.step == step.rawValue }.map(\.value))
+            BucketSeries(buckets: usage[step.rawValue] ?? [])
         }
         state.minutes = buckets(.minute)
         state.hours = buckets(.hour)
