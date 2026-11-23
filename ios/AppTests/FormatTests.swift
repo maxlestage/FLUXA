@@ -714,6 +714,19 @@ final class FormatTests: XCTestCase {
         XCTAssertTrue(anonymous.hasPrefix("172.20.10.3. débit vers l’appareil —"), anonymous)
     }
 
+    func testTheSharingTabFollowsTheSharingOnlyWhileShown() {
+        var reads = 0
+        func sharing() -> String? {
+            reads += 1
+            return "partage"
+        }
+        XCTAssertEqual(HotspotGuideView.watched(sharing(), visible: true), "partage")
+        XCTAssertEqual(reads, 1)
+        // Caché, l'onglet ne lit pas l'état : il n'est pas abonné à ses changements.
+        XCTAssertNil(HotspotGuideView.watched(sharing(), visible: false))
+        XCTAssertEqual(reads, 1)
+    }
+
     func testTheLiveChartIsFollowedOnlyOnTheDashboard() {
         XCTAssertTrue(AppModel.followsLiveChart(dashboardVisible: true))
         XCTAssertFalse(AppModel.followsLiveChart(dashboardVisible: false), "ailleurs, la courbe n'est pas recopiée")
