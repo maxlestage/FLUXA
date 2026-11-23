@@ -129,7 +129,7 @@ final class SpeedTestRunner {
     }
 
     private func transfer(_ direction: Direction, base: URL) async -> (bps: Double?, bytes: UInt64) {
-        let counter = TransferCounter()
+        let counter = TransferCounter(budget: TransferBudget(limit: direction.byteLimit))
         let configuration = URLSessionConfiguration.ephemeral
         configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         configuration.urlCache = nil
@@ -154,8 +154,10 @@ final class SpeedTestRunner {
                 session.uploadTask(with: request, from: body).resume()
             }
         }
-        // Un transfert terminé est relancé : le débit se mesure sur toute la durée.
+        // Un transfert terminé est relancé : le débit se mesure sur toute la durée. Le volume
+        // annoncé atteint, les transferts s'arrêtent aussitôt, sans attendre le relevé suivant.
         counter.onSuccess = launch
+        counter.onBudgetSpent = { [weak session] in session?.invalidateAndCancel() }
         for _ in 0..<direction.connections {
             launch()
         }
@@ -167,7 +169,7 @@ final class SpeedTestRunner {
             let elapsed = Date().timeIntervalSince(started)
             meter.add(bytes: counter.take(), at: elapsed)
             liveBps = meter.bps(at: elapsed)
-            if elapsed >= direction.duration || meter.totalBytes >= direction.byteLimit {
+            if elapsed >= direction.duration || meter.totalBytes >= direction.byteLimit || counter.budgetSpent {
                 break
             }
             // Toutes les connexions ont échoué sans rien transférer : inutile d'attendre.
@@ -176,8 +178,11 @@ final class SpeedTestRunner {
             }
         }
         counter.onSuccess = nil
-        transferredBytes += meter.totalBytes
-        return (meter.finalBps, meter.totalBytes)
+        counter.onBudgetSpent = nil
+        // Les octets arrivés depuis le dernier relevé comptent dans le volume, pas dans le débit.
+        let volume = meter.totalBytes + UInt64(max(counter.take(), 0))
+        transferredBytes += volume
+        return (meter.finalBps, volume)
     }
 
     /// L'adresse d'un point d'entrée du serveur de test.
@@ -202,12 +207,59 @@ final class SpeedTestRunner {
     }
 }
 
+/// Le volume qu'une phase du test peut transférer. Il est compté à chaque morceau reçu ou
+/// envoyé, et non au relevé suivant (toutes les 200 ms) : à 1 Gb/s, 200 ms font 25 Mo de
+/// plus que le volume annoncé. Le dépassement se borne au morceau qui l'atteint.
+struct TransferBudget: Equatable {
+    let limit: UInt64
+    private(set) var spent: UInt64 = 0
+
+    init(limit: UInt64) {
+        self.limit = limit
+    }
+
+    /// Compte un morceau. `false` : le volume est atteint, les transferts doivent cesser.
+    mutating func spend(_ bytes: Int) -> Bool {
+        let (sum, overflow) = spent.addingReportingOverflow(UInt64(max(bytes, 0)))
+        spent = overflow ? .max : sum
+        return spent < limit
+    }
+}
+
 /// Compte les octets reçus et envoyés par les transferts d'une session.
 private final class TransferCounter: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var pending = 0
     private var failed = 0
     private var restart: (@Sendable () -> Void)?
+    private var budget: TransferBudget
+    private var spentAll = false
+    private var stop: (@Sendable () -> Void)?
+
+    init(budget: TransferBudget) {
+        self.budget = budget
+    }
+
+    /// Appelé une fois, quand le volume de la phase est atteint.
+    var onBudgetSpent: (@Sendable () -> Void)? {
+        get { lock.withLock { stop } }
+        set { lock.withLock { stop = newValue } }
+    }
+
+    var budgetSpent: Bool {
+        lock.withLock { spentAll }
+    }
+
+    /// Compte des octets ; le volume atteint, arrête la session une seule fois.
+    private func count(_ bytes: Int) {
+        let stopNow: (@Sendable () -> Void)? = lock.withLock {
+            pending += bytes
+            guard !spentAll, !budget.spend(bytes) else { return nil }
+            spentAll = true
+            return stop
+        }
+        stopNow?()
+    }
 
     /// Appelé quand un transfert se termine sans erreur.
     var onSuccess: (@Sendable () -> Void)? {
@@ -245,7 +297,7 @@ private final class TransferCounter: NSObject, URLSessionDataDelegate, @unchecke
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         // Seul le téléchargement compte les octets reçus : la réponse à un envoi est minuscule.
         guard dataTask.originalRequest?.httpMethod != "POST" else { return }
-        lock.withLock { pending += data.count }
+        count(data.count)
     }
 
     func urlSession(
@@ -255,11 +307,11 @@ private final class TransferCounter: NSObject, URLSessionDataDelegate, @unchecke
         totalBytesSent: Int64,
         totalBytesExpectedToSend: Int64
     ) {
-        lock.withLock { pending += Int(bytesSent) }
+        count(Int(bytesSent))
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if error == nil {
+        if error == nil, !budgetSpent {
             onSuccess?()
         } else {
             lock.withLock { failed += 1 }
