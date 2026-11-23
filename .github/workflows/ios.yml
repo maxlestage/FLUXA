@@ -121,12 +121,16 @@ jobs:
           # (« The test runner crashed »), ou reste bloqué sur un test jusqu'à ce que
           # xcodebuild le redémarre (« Restarting after unexpected exit »), sans refaire ce
           # test : le run finit en échec sans aucun test échoué. Dans ces seuls cas, les tests
-          # sont refaits une fois, sans recompiler. Un test qui échoue reste un échec.
+          # sont refaits une fois, sans recompiler. Un test qui échoue reste un échec : seul
+          # compte comme rattrapé un test échoué qui a réussi à sa relance.
+          tests() { grep -oE "^Test Case '-\[[^]]+\]' $1" test.log | sed -E "s/^Test Case '-\[([^]]+)\]' .*/\1/" | sort -u; }
+          still_failing=$(comm -23 <(tests failed) <(tests passed))
           if grep -q "The test runner crashed\|Test runner never began executing tests\|Restarting after unexpected exit" test.log \
-            && ! grep -qE "^Test Case .* failed \(" test.log; then
+            && [ -z "$still_failing" ]; then
             echo "::warning::Le lanceur de tests a planté ou s'est bloqué de lui-même : les tests sont refaits une fois."
             run_tests test-without-building
           else
+            [ -n "$still_failing" ] && echo "::error::Tests en échec : $still_failing"
             exit 1
           fi
       - name: Keep the full test log when the tests fail
