@@ -17,6 +17,7 @@
 //! jamais un mandataire ouvert sur un Wi-Fi public.
 
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -424,45 +425,47 @@ impl Relay {
         let networks = self.shared.networks.current(self.shared.networks.ttl);
         let state = lock(&self.shared.state);
         let now = Instant::now();
-        let mut clients: Vec<(&IpAddr, &Client)> = state
-            .clients
-            .iter()
-            .filter(|(_, client)| {
-                client.connections > 0
-                    || now.duration_since(client.last_seen) < Duration::from_secs(600)
-            })
-            .collect();
+        let mut clients: Vec<(&IpAddr, &Client)> = Vec::with_capacity(state.clients.len());
+        clients.extend(state.clients.iter().filter(|(_, client)| {
+            client.connections > 0
+                || now.duration_since(client.last_seen) < Duration::from_secs(600)
+        }));
         clients.sort_by_key(|(address, _)| **address);
-        let clients: Vec<String> = clients
-            .into_iter()
-            .map(|(address, client)| {
-                let limit = state.overrides.get(address).copied().unwrap_or_default();
-                format!(
-                    "{{\"address\":\"{address}\",\"connections\":{},\"to_device_bytes\":{},\"from_device_bytes\":{},\
-                     \"idle_seconds\":{:.1},\"download_limit\":{},\"upload_limit\":{}}}",
-                    client.connections,
-                    client.to_device,
-                    client.from_device,
-                    now.duration_since(client.last_seen).as_secs_f64(),
-                    limit.download,
-                    limit.upload,
-                )
-            })
-            .collect();
-        let addresses: Vec<String> = networks
-            .iter()
-            .map(|(address, _)| format!("\"{address}\""))
-            .collect();
-        format!(
-            "{{\"running\":true,\"port\":{},\"active_connections\":{},\"max_connections\":{},\"download_limit\":{},\"upload_limit\":{},\"addresses\":[{}],\"clients\":[{}]}}",
+        // Écrit d'un trait dans une seule chaîne, assez grande d'avance (et un octet de plus
+        // pour le zéro final que lui ajoute l'ABI C) : un nombre fixe d'allocations, quel que
+        // soit le nombre d'appareils.
+        let mut json = String::with_capacity(STATUS_BASE + STATUS_PER_CLIENT * clients.len());
+        let _ = write!(
+            json,
+            "{{\"running\":true,\"port\":{},\"active_connections\":{},\"max_connections\":{},\"download_limit\":{},\"upload_limit\":{},\"addresses\":[",
             self.port,
             self.shared.active.load(Ordering::Relaxed),
             self.shared.max_connections,
             state.global.download,
             state.global.upload,
-            addresses.join(","),
-            clients.join(","),
-        )
+        );
+        for (index, (address, _)) in networks.iter().enumerate() {
+            let separator = if index == 0 { "" } else { "," };
+            let _ = write!(json, "{separator}\"{address}\"");
+        }
+        json.push_str("],\"clients\":[");
+        for (index, (address, client)) in clients.iter().enumerate() {
+            let limit = state.overrides.get(address).copied().unwrap_or_default();
+            let separator = if index == 0 { "" } else { "," };
+            let _ = write!(
+                json,
+                "{separator}{{\"address\":\"{address}\",\"connections\":{},\"to_device_bytes\":{},\"from_device_bytes\":{},\
+                 \"idle_seconds\":{:.1},\"download_limit\":{},\"upload_limit\":{}}}",
+                client.connections,
+                client.to_device,
+                client.from_device,
+                now.duration_since(client.last_seen).as_secs_f64(),
+                limit.download,
+                limit.upload,
+            );
+        }
+        json.push_str("]}");
+        json
     }
 
     /// Arrête le relais et coupe les connexions en cours.
@@ -896,6 +899,10 @@ struct Buffer {
     bytes: Vec<u8>,
 }
 
+/// La place réservée pour l'état du relais : la partie fixe, puis chaque appareil.
+const STATUS_BASE: usize = 256;
+const STATUS_PER_CLIENT: usize = 224;
+
 /// La taille de départ du tampon de chaque sens.
 const START_CHUNK: usize = 4 * 1024;
 
@@ -1301,6 +1308,90 @@ mod tests {
         // 127.0.0.1 n'est pas plafonné : l'échange est quasi immédiat.
         assert_eq!(drain(through_connect(&relay, target)), 300_000);
         assert!(started.elapsed() < Duration::from_millis(800));
+    }
+
+    /// Compte les allocations du fil courant, pour les tests qui les mesurent.
+    mod allocations {
+        use std::alloc::{GlobalAlloc, Layout, System};
+        use std::cell::Cell;
+
+        thread_local!(static COUNT: Cell<usize> = const { Cell::new(0) });
+
+        struct Counting;
+
+        // SAFETY : tout est délégué à l'allocateur du système ; seul un compteur s'ajoute.
+        unsafe impl GlobalAlloc for Counting {
+            unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+                let _ = COUNT.try_with(|count| count.set(count.get() + 1));
+                unsafe { System.alloc(layout) }
+            }
+            unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+                unsafe { System.dealloc(pointer, layout) }
+            }
+            unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8 {
+                let _ = COUNT.try_with(|count| count.set(count.get() + 1));
+                unsafe { System.realloc(pointer, layout, size) }
+            }
+        }
+
+        #[global_allocator]
+        static ALLOCATOR: Counting = Counting;
+
+        pub fn during(work: impl FnOnce()) -> usize {
+            let before = COUNT.with(Cell::get);
+            work();
+            COUNT.with(Cell::get) - before
+        }
+    }
+
+    #[test]
+    fn the_status_is_written_in_one_go() {
+        let relay = Relay::start(0, true).unwrap();
+        let add = |count: u8, from: u8| {
+            for last in from..from + count {
+                relay
+                    .shared
+                    .connection_opened(IpAddr::V4(Ipv4Addr::new(172, 20, 10, last)));
+            }
+        };
+        add(3, 2);
+        let _ = relay.status_json();
+        let mut json = String::new();
+        let few = allocations::during(|| json = relay.status_json());
+        assert!(json.contains("\"address\":\"172.20.10.4\""), "{json}");
+        assert!(json.ends_with("}]}"), "{json}");
+        add(10, 5);
+        let many = allocations::during(|| json = relay.status_json());
+        assert!(json.contains("\"address\":\"172.20.10.14\""), "{json}");
+        // La liste des appareils triée, la liste des réseaux, la chaîne : trois allocations,
+        // pour trois appareils comme pour treize, et la place du zéro final de l'ABI C.
+        assert_eq!(few, 3, "{few} allocations");
+        assert_eq!(many, 3, "{many} allocations");
+        assert!(
+            json.capacity() > json.len(),
+            "{} / {}",
+            json.len(),
+            json.capacity()
+        );
+        assert!(balanced(&json), "{json}");
+    }
+
+    /// Les accolades et crochets s'équilibrent, hors des chaînes.
+    fn balanced(json: &str) -> bool {
+        let mut depth = 0i32;
+        let mut quoted = false;
+        for character in json.chars() {
+            match character {
+                '"' => quoted = !quoted,
+                '{' | '[' if !quoted => depth += 1,
+                '}' | ']' if !quoted => depth -= 1,
+                _ => {}
+            }
+            if depth < 0 {
+                return false;
+            }
+        }
+        depth == 0 && !quoted
     }
 
     #[test]
