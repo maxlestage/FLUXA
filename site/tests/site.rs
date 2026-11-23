@@ -282,7 +282,7 @@ async fn the_optimisations_are_the_apps() {
         "au plus toutes les 10 s",
         "sous 20 % de batterie",
         "ne se relisent que s’ils sont affichés",
-        "n’est recopiée chaque seconde que tableau de bord affiché",
+        "le tableau de bord ne suit la mesure de chaque seconde, et ne recopie la courbe de la dernière minute, que s’il est affiché",
         "l’onglet Partage ne suit l’état du partage, qui change chaque seconde, que s’il est affiché",
         "laisse 100 ms de marge à iOS",
         "écartées sur leur nom brut, sans rien copier",
@@ -299,6 +299,10 @@ async fn the_optimisations_are_the_apps() {
     assert!(model.contains("sampleTolerance: Duration = .milliseconds(100)"));
     assert!(model.contains("tolerance: Self.sampleTolerance"));
     assert!(model.contains("if Self.followsLiveChart(dashboardVisible: dashboardVisible) {"));
+    assert!(
+        model.contains("Self.shown(snapshot, hidden: hiddenSnapshot, visible: dashboardVisible)")
+    );
+    assert!(!read("App/Features/DashboardView.swift").contains("model.snapshot"));
     assert!(
         read("App/Features/HotspotGuideView.swift")
             .contains("HotspotGuideView.watched(model.sharing, visible: visible)")
