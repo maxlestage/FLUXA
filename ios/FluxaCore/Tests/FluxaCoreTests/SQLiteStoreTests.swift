@@ -749,6 +749,42 @@ final class SQLiteStoreTests: XCTestCase {
         XCTAssertEqual(try SQLiteStore(url: url).load()?.minutes, state.minutes)
     }
 
+    func testTheVolumePerNetworkIsComparedInOnePassToo() throws {
+        let store = try SQLiteStore(url: url)
+        var state = EngineState()
+        let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        for hour in 0..<720 {
+            for kind in [InterfaceClass.wifi, .cellular, .wired] {
+                state.networkHours.add(
+                    kind: kind, receivedBytes: 1_000, sentBytes: 10, at: start.addingTimeInterval(Double(hour) * 3_600))
+            }
+        }
+        try store.save(state)
+        // Une heure du Wi-Fi complétée : une ligne, parmi 2 160.
+        state.networkHours.add(kind: .wifi, receivedBytes: 1, sentBytes: 1, at: start.addingTimeInterval(719 * 3_600))
+        try store.save(state)
+        XCTAssertEqual(store.lastSaveChanges, 1)
+        XCTAssertEqual(try SQLiteStore(url: url).load()?.networkHours, state.networkHours)
+    }
+
+    func testUnknownNetworkFamiliesAtTheSameHourBecomeOneOther() throws {
+        var state = EngineState()
+        let hour = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        state.networkHours.add(kind: .wifi, receivedBytes: 5, sentBytes: 5, at: hour)
+        try SQLiteStore(url: url).save(state)
+        // Deux familles d'une version plus récente, à la même heure.
+        let database = try SQLiteDatabase(path: url.path)
+        for (family, bytes) in [("satellite", 7), ("laser", 9)] {
+            try database.execute(
+                "INSERT INTO network_usage (step, start, network, received_bytes, sent_bytes) VALUES "
+                    + "('hour', \(hour.timeIntervalSinceReferenceDate), '\(family)', \(bytes), 0)")
+        }
+        let loaded = try XCTUnwrap(SQLiteStore(url: url).load())
+        let others = loaded.networkHours.buckets.filter { $0.kind == .other }
+        XCTAssertEqual(others.count, 1, "une seule entrée « autre » à cette heure")
+        XCTAssertEqual(loaded.networkHours.count, 2)
+    }
+
     func testTheWritesOfAMinuteAreCompiledOnce() throws {
         let store = try SQLiteStore(url: url)
         let bench = Bench(store: store).started()
