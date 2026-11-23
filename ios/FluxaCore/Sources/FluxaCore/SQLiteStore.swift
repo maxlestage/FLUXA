@@ -422,13 +422,30 @@ public final class SQLiteStore: EngineStore {
 
         try database.rows(
             "SELECT step, start, network, received_bytes, sent_bytes FROM network_usage"
-        ) { row -> (NetworkUsageKey, NetworkBucket) in
+        ) { row -> (String, NetworkBucket) in
             // Une famille inconnue (écrite par une version plus récente) se range dans « autre ».
             let kind = InterfaceClass(rawValue: row.text(2)) ?? .other
             let bucket = NetworkBucket(
                 start: row.date(1), kind: kind, receivedBytes: row.unsigned(3), sentBytes: row.unsigned(4))
-            return (NetworkUsageKey(step: row.text(0), start: row.real(1), network: kind.rawValue), bucket)
-        }.forEach { contents.networkUsage[$0.0] = $0.1 }
+            return (row.text(0), bucket)
+        }.forEach { contents.networkUsage[$0.0, default: []].append($0.1) }
+        for step in contents.networkUsage.keys {
+            // Triés ; deux familles inconnues rangées dans « autre » au même début n'en font
+            // qu'une, la dernière lue, comme une table à clés le ferait.
+            let sorted = contents.networkUsage[step, default: []].enumerated().sorted {
+                NetworkSeries.precedes($0.element, $1.element)
+                    || (!NetworkSeries.precedes($1.element, $0.element) && $0.offset < $1.offset)
+            }.map(\.element)
+            var unique: [NetworkBucket] = []
+            for bucket in sorted {
+                if let last = unique.last, !NetworkSeries.precedes(last, bucket) {
+                    unique[unique.count - 1] = bucket
+                } else {
+                    unique.append(bucket)
+                }
+            }
+            contents.networkUsage[step] = unique
+        }
 
         try database.rows("SELECT id, started_at, ended_at, volumes_json FROM absences") { row in
             AbsenceUsage(
@@ -589,14 +606,24 @@ public final class SQLiteStore: EngineStore {
     /// Ce qui sépare deux suites triées par début, d'un seul parcours des deux : les débuts
     /// disparus, et les périodes nouvelles ou modifiées.
     static func changes(from old: [Bucket], to new: [Bucket]) -> (removed: [Date], changed: [Bucket]) {
-        var removed: [Date] = []
-        var changed: [Bucket] = []
+        let changes = changes(from: old, to: new) { $0.start < $1.start }
+        return (changes.removed.map(\.start), changes.changed)
+    }
+
+    /// Ce qui sépare deux suites triées selon `precedes`, d'un seul parcours des deux : les
+    /// lignes disparues, et les lignes nouvelles ou modifiées. Deux lignes dont aucune ne
+    /// précède l'autre ont la même clé.
+    static func changes<Row: Equatable>(
+        from old: [Row], to new: [Row], by precedes: (Row, Row) -> Bool
+    ) -> (removed: [Row], changed: [Row]) {
+        var removed: [Row] = []
+        var changed: [Row] = []
         var (i, j) = (0, 0)
         while i < old.count || j < new.count {
-            if j == new.count || (i < old.count && old[i].start < new[j].start) {
-                removed.append(old[i].start)
+            if j == new.count || (i < old.count && precedes(old[i], new[j])) {
+                removed.append(old[i])
                 i += 1
-            } else if i == old.count || new[j].start < old[i].start {
+            } else if i == old.count || precedes(new[j], old[i]) {
                 changed.append(new[j])
                 j += 1
             } else {
@@ -730,22 +757,34 @@ public final class SQLiteStore: EngineStore {
     }
 
     private func writeNetworkUsage(_ old: StoredContents, _ new: StoredContents) throws {
-        try sync(
-            old.networkUsage, new.networkUsage,
-            delete: "DELETE FROM network_usage WHERE step = ? AND start = ? AND network = ?",
-            upsert: """
-                INSERT INTO network_usage (step, start, network, received_bytes, sent_bytes)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(step, start, network) DO UPDATE SET
-                    received_bytes = excluded.received_bytes, sent_bytes = excluded.sent_bytes
-                """,
-            key: { [.text($0.step), .real($0.start), .text($0.network)] },
-            row: { key, bucket in
-                [
-                    .text(key.step), .real(key.start), .text(key.network),
-                    .unsigned(bucket.receivedBytes), .unsigned(bucket.sentBytes),
-                ]
-            })
+        guard old.networkUsage != new.networkUsage else { return }
+        let delete = "DELETE FROM network_usage WHERE step = ? AND start = ? AND network = ?"
+        let upsert = """
+            INSERT INTO network_usage (step, start, network, received_bytes, sent_bytes)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(step, start, network) DO UPDATE SET
+                received_bytes = excluded.received_bytes, sent_bytes = excluded.sent_bytes
+            """
+        for step in Set(old.networkUsage.keys).union(new.networkUsage.keys) {
+            let changes = Self.changes(
+                from: old.networkUsage[step] ?? [], to: new.networkUsage[step] ?? [],
+                by: NetworkSeries.precedes)
+            if !changes.removed.isEmpty {
+                let statement = try database.statement(delete)
+                for bucket in changes.removed {
+                    try statement.run([.text(step), .date(bucket.start), .text(bucket.kind.rawValue)])
+                }
+            }
+            if !changes.changed.isEmpty {
+                let statement = try database.statement(upsert)
+                for bucket in changes.changed {
+                    try statement.run([
+                        .text(step), .date(bucket.start), .text(bucket.kind.rawValue),
+                        .unsigned(bucket.receivedBytes), .unsigned(bucket.sentBytes),
+                    ])
+                }
+            }
+        }
     }
 
     private func writeAbsences(_ old: StoredContents, _ new: StoredContents) throws {
@@ -822,13 +861,6 @@ struct Positioned<Value: Equatable>: Equatable {
     var value: Value
 }
 
-/// La clé d'un volume par réseau : son pas, son début et la famille d'interfaces.
-struct NetworkUsageKey: Hashable {
-    var step: String
-    var start: Double
-    var network: String
-}
-
 /// Le contenu de la base, famille par famille, tel qu'il se compare ligne à ligne.
 struct StoredContents: Equatable {
     var settings: [String: String] = [:]
@@ -843,7 +875,9 @@ struct StoredContents: Equatable {
     var automationLog: [AutomationEvent] = []
     var speedTests: [Double: SpeedTestResult] = [:]
     var devices: [String: Positioned<Device>] = [:]
-    var networkUsage: [NetworkUsageKey: NetworkBucket] = [:]
+    /// Le volume par réseau, par pas (`hour`, `day`), trié par début puis par famille :
+    /// les suites mêmes du moteur, comparées comme les agrégats, d'un seul parcours.
+    var networkUsage: [String: [NetworkBucket]] = [:]
     /// Les absences et les sessions de partage, par identifiant : leur ordre est celui
     /// de leurs identifiants.
     var absences: [Int: AbsenceUsage] = [:]
@@ -899,13 +933,8 @@ struct StoredContents: Equatable {
             usage[step.rawValue] = buckets.buckets
         }
         let networks: [(HistoryStep, NetworkSeries)] = [(.hour, state.networkHours), (.day, state.networkDays)]
-        for (step, series) in networks {
-            for bucket in series.buckets {
-                let key = NetworkUsageKey(
-                    step: step.rawValue, start: bucket.start.timeIntervalSinceReferenceDate,
-                    network: bucket.kind.rawValue)
-                networkUsage[key] = bucket
-            }
+        for (step, series) in networks where series.count > 0 {
+            networkUsage[step.rawValue] = series.buckets
         }
         // Un identifiant en double garde sa première occurrence.
         for absence in state.absences where absences[absence.id] == nil {
@@ -987,7 +1016,7 @@ struct StoredContents: Equatable {
             try SQLiteStore.decode(SharingSession.self, $0, "app_settings")
         }
         let networks = { (step: HistoryStep) in
-            NetworkSeries(buckets: networkUsage.filter { $0.key.step == step.rawValue }.map(\.value))
+            NetworkSeries(buckets: networkUsage[step.rawValue] ?? [])
         }
         state.networkHours = networks(.hour)
         state.networkDays = networks(.day)

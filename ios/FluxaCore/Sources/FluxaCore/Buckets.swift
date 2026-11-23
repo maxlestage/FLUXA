@@ -212,7 +212,7 @@ struct NetworkSeries: Equatable, Sendable {
 
     var count: Int { buckets.count }
 
-    private static func precedes(_ left: NetworkBucket, _ right: NetworkBucket) -> Bool {
+    static func precedes(_ left: NetworkBucket, _ right: NetworkBucket) -> Bool {
         left.start != right.start ? left.start < right.start : left.kind.rawValue < right.kind.rawValue
     }
 
