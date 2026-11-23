@@ -107,12 +107,17 @@ jobs:
           set -o pipefail
           # Un test échoué est relancé une fois : le simulateur rate parfois le lancement
           # de l'app (« does not have a process ID »). Un vrai défaut échoue deux fois.
+          # Un test a au plus 4 minutes (6 s'il en demande plus) : un test bloqué échoue
+          # alors au lieu d'occuper toute l'étape, et les autres tests passent quand même.
           run_tests() {
             xcodebuild \
               -project Fluxa.xcodeproj -scheme Fluxa -configuration Debug \
               -destination "platform=iOS Simulator,id=$DEVICE" \
               -derivedDataPath build \
               -retry-tests-on-failure -test-iterations 2 \
+              -test-timeouts-enabled YES \
+              -default-test-execution-time-allowance 240 \
+              -maximum-test-execution-time-allowance 360 \
               "$1" 2>&1 | tee -a test.log \
               | grep --line-buffered -E "error:|Test Case .* (passed|failed|started)|Executed [0-9]+ test|\*\* TEST|[Cc]rash|Restarting after|unexpected exit|Testing failed|Test runner"
           }
