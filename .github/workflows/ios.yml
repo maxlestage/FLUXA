@@ -128,6 +128,12 @@ jobs:
           if grep -q "The test runner crashed\|Test runner never began executing tests\|Restarting after unexpected exit" test.log \
             && [ -z "$still_failing" ]; then
             echo "::warning::Le lanceur de tests a planté ou s'est bloqué de lui-même : les tests sont refaits une fois."
+            # Sur un simulateur remis à neuf : les tests d'interface partent d'une app vierge,
+            # comme au premier passage, et non de ce que la première passe a enregistré.
+            xcrun simctl shutdown "$DEVICE" || true
+            xcrun simctl erase "$DEVICE"
+            xcrun simctl boot "$DEVICE"
+            xcrun simctl bootstatus "$DEVICE" -b
             run_tests test-without-building
           else
             [ -n "$still_failing" ] && echo "::error::Tests en échec : $still_failing"
