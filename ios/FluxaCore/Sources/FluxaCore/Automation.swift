@@ -298,10 +298,33 @@ extension FluxaEngine {
 
     /// L'occurrence de la plage qui contient `date`. Une plage qui passe minuit a pu
     /// commencer la veille : `weekdays` désigne le jour de son début.
+    ///
+    /// Les occurrences possibles (celle du jour, celle de la veille) ne changent qu'avec le
+    /// jour : elles sont calculées une fois par jour et par plage, et non à chaque seconde.
     private func occurrence(startMinute: Int, endMinute: Int, weekdays: Set<Int>, at date: Date)
         -> DateInterval?
     {
-        let today = calendar.startOfDay(for: date)
+        let today = dayStart(of: date)
+        let key = ScheduleKey(startMinute: startMinute, endMinute: endMinute, weekdays: weekdays, day: today)
+        let windows: [DateInterval]
+        if let known = scheduleWindows[key] {
+            windows = known
+        } else {
+            if scheduleWindows.keys.contains(where: { $0.day != today }) {
+                scheduleWindows.removeAll()
+            }
+            windows = scheduleOccurrences(startMinute: startMinute, endMinute: endMinute, weekdays: weekdays, today: today)
+            scheduleWindows[key] = windows
+        }
+        return windows.first { date >= $0.start && date < $0.end }
+    }
+
+    /// Les occurrences d'une plage qui commencent le jour même ou la veille, dans cet ordre.
+    private func scheduleOccurrences(startMinute: Int, endMinute: Int, weekdays: Set<Int>, today: Date)
+        -> [DateInterval]
+    {
+        scheduleWindowComputations += 1
+        var windows: [DateInterval] = []
         let yesterday = calendar.date(byAdding: .day, value: -1, to: today)
         for case let dayStart? in [today, yesterday] {
             let weekday = calendar.component(.weekday, from: dayStart)
@@ -311,11 +334,9 @@ extension FluxaEngine {
             guard let start = time(startMinute, on: dayStart), let endDay,
                 let end = time(endMinute, on: endDay), end > start
             else { continue }
-            if date >= start, date < end {
-                return DateInterval(start: start, end: end)
-            }
+            windows.append(DateInterval(start: start, end: end))
         }
-        return nil
+        return windows
     }
 
     private func time(_ minute: Int, on dayStart: Date) -> Date? {
@@ -505,4 +526,12 @@ extension FluxaEngine {
         let clock = { (minute: Int) in String(format: "%02d:%02d", minute / 60, minute % 60) }
         return "\(clock(startMinute))–\(clock(endMinute))"
     }
+}
+
+/// Une plage horaire, un jour donné : la clé de ses occurrences gardées.
+struct ScheduleKey: Hashable {
+    var startMinute: Int
+    var endMinute: Int
+    var weekdays: Set<Int>
+    var day: Date
 }

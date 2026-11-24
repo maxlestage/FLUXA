@@ -292,6 +292,7 @@ async fn the_optimisations_are_the_apps() {
         "260 Mo au plus. Ce volume est tenu : chaque morceau reçu ou envoyé est compté",
         "Un avis d’iOS sur le réseau qui ne change rien de ce que l’app en montre ne réécrit rien",
         "ne calculent le forfait qu’une fois par relevé, quel que soit le nombre de règles",
+        "ne recalculent les plages horaires qu’une fois par jour",
         "laisse 100 ms de marge à iOS",
         "écartées sur leur nom brut, sans rien copier",
         "dort d’un trait jusqu’à l’échéance, au lieu de se réveiller toutes les 100 ms",
@@ -349,6 +350,10 @@ async fn the_optimisations_are_the_apps() {
     assert!(
         read("FluxaCore/Sources/FluxaCore/Automation.swift")
             .contains("guard let status = plan() else { return nil }")
+    );
+    assert!(
+        read("FluxaCore/Sources/FluxaCore/Automation.swift")
+            .contains("if let known = scheduleWindows[key] {")
     );
     for retention in [
         "date.addingTimeInterval(-7 * 86_400)",
