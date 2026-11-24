@@ -263,6 +263,10 @@ final class DeviceTests: XCTestCase {
         XCTAssertTrue(minutes.hasSuffix("\n"), "chaque ligne se termine par un saut de ligne")
         XCTAssertFalse(minutes.contains("\r"))
 
+        // Les agrégats que l'écran a déjà lus donnent le même fichier, sans relire l'historique.
+        let shown = bench.engine.history(from: noon, to: noon.addingTimeInterval(day), step: .minute)
+        XCTAssertEqual(FluxaEngine.csv(shown), minutes)
+
         let hours = bench.engine.exportCSV(from: noon, to: noon.addingTimeInterval(day), step: .hour)
         XCTAssertEqual(
             hours.split(separator: "\n").dropFirst().map(String.init),

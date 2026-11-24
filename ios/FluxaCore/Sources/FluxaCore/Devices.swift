@@ -180,8 +180,14 @@ extension FluxaEngine {
     /// `pic_descendant_bps`, `pic_montant_bps`, `octets_recus`, `octets_envoyes`, `mesures`.
     /// Les débits sont des entiers arrondis ; le point décimal n'apparaît donc pas.
     public func exportCSV(from: Date, to: Date, step: HistoryStep) -> String {
+        Self.csv(history(from: from, to: to, step: step))
+    }
+
+    /// Des agrégats déjà lus, au format CSV de `exportCSV`. Sans état : l'écran qui les a
+    /// déjà sous la main ne relit pas l'historique, et ne met en forme qu'au partage.
+    public static func csv(_ aggregates: [Aggregate]) -> String {
         var lines = [Self.csvHeader]
-        for aggregate in history(from: from, to: to, step: step) {
+        for aggregate in aggregates {
             let fields = [
                 Self.iso8601(aggregate.start),
                 Self.integer(aggregate.averageDownloadBps),
