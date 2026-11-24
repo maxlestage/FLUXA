@@ -727,6 +727,15 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(reads, 1)
     }
 
+    func testTheHistoryExportReusesWhatTheScreenRead() {
+        let engine = FluxaEngine(store: MemoryStore())
+        let shown = engine.history(from: .distantPast, to: .distantFuture, step: .hour)
+        let export = HistoryExport(aggregates: shown)
+        // Le même fichier que l'export du moteur, mis en forme seulement quand on le demande.
+        XCTAssertEqual(export.csv, engine.exportCSV(from: .distantPast, to: .distantFuture, step: .hour))
+        XCTAssertEqual(export.aggregates, shown)
+    }
+
     func testTheSpeedTestDataIsDrawnByWords() {
         let block = SpeedTestRunner.randomBlock(bytes: 65_536)
         XCTAssertEqual(block.count, 65_536)

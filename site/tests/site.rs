@@ -286,6 +286,7 @@ async fn the_optimisations_are_the_apps() {
         "au plus toutes les 10 s",
         "sous 20 % de batterie",
         "ne se relisent que s’ils sont affichés",
+        "l’export de l’historique n’est mis en forme qu’au partage",
         "le tableau de bord ne suit la mesure de chaque seconde, et ne recopie la courbe de la dernière minute, que s’il est affiché",
         "l’onglet Partage ne suit l’état du partage, qui change chaque seconde, que s’il est affiché",
         "Les réglages ne suivent que le volume du forfait, pas son usage relevé toutes les 10 s",
@@ -378,6 +379,10 @@ async fn the_optimisations_are_the_apps() {
     assert!(counters.contains("name: String(cString: interface.ifa_name)"));
     assert!(model.contains("relayScreenVisible ? 1 : (dashboardVisible ? 5 : 10)"));
     assert!(read("App/Features/HistoryView.swift").contains("visible ? revision() : nil"));
+    assert!(
+        read("App/Features/HistoryView.swift")
+            .contains("item: HistoryExport(aggregates: aggregates)")
+    );
     assert!(
         read("App/Features/DiagnosticsView.swift")
             .contains("watchedRevision(model.historyRevision, visible: visible)")
