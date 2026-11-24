@@ -181,7 +181,7 @@ struct HistoryView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     ShareLink(
-                        item: HistoryExport(csv: model.exportCSV(from: start, to: now, step: period.step)),
+                        item: HistoryExport(aggregates: aggregates),
                         preview: SharePreview("Historique FLUXA, \(period.title)")
                     ) {
                         Label("Exporter", systemImage: "square.and.arrow.up")
@@ -381,8 +381,12 @@ private struct SummaryRow: View {
 }
 
 /// L'historique exporté : un fichier CSV, lisible par un tableur.
+/// L'historique à partager. Il porte les agrégats que l'écran a déjà lus, et ne les met
+/// en forme qu'au partage : rien n'est relu ni écrit en CSV à chaque mise à jour de l'écran.
 struct HistoryExport: Transferable {
-    let csv: String
+    let aggregates: [Aggregate]
+
+    var csv: String { FluxaEngine.csv(aggregates) }
 
     static var transferRepresentation: some TransferRepresentation {
         DataRepresentation(exportedContentType: .commaSeparatedText) { export in
