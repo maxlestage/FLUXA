@@ -469,6 +469,29 @@ final class PlanUsageRuleTests: XCTestCase {
         XCTAssertTrue(engine.evaluateAutomations().isEmpty)
     }
 
+    func testThePlanIsComputedOncePerEvaluation() throws {
+        let bench = Bench().started()
+        let engine = bench.engine
+        try engine.setDataPlan(DataPlan(allowanceBytes: 100 * megabyte, resetDay: 1))
+        for (name, percent) in [("Moitié", 50), ("Alerte", 80), ("Tout", 100)] {
+            try engine.saveRule(rule(name, percent: percent))
+        }
+        bench.measure(seconds: 10, down: 8, up: 0)
+        // Trois règles de forfait : un seul calcul du forfait par évaluation, et non trois.
+        for _ in 0..<5 {
+            let before = engine.planStatusComputations
+            XCTAssertTrue(engine.evaluateAutomations().isEmpty)
+            XCTAssertEqual(engine.planStatusComputations - before, 1)
+        }
+        // Sans règle de forfait, aucun calcul.
+        for rule in engine.automationRules {
+            try engine.deleteRule(id: rule.id)
+        }
+        let before = engine.planStatusComputations
+        engine.evaluateAutomations()
+        XCTAssertEqual(engine.planStatusComputations, before)
+    }
+
     func testFiresOncePerCycleAtTheThreshold() throws {
         let bench = Bench().started()
         let engine = bench.engine
