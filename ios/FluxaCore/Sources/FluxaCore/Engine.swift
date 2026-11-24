@@ -32,6 +32,10 @@ public final class FluxaEngine {
     private var pathOnline = false
     /// Le nombre de calculs de l'état du forfait, pour les tests qui le mesurent.
     var planStatusComputations = 0
+    /// Les occurrences des plages horaires du jour, gardées pour les automatisations.
+    var scheduleWindows: [ScheduleKey: [DateInterval]] = [:]
+    /// Le nombre de calculs d'occurrences de plages, pour les tests qui le mesurent.
+    var scheduleWindowComputations = 0
     /// Le dernier débit calculé. `nil` : rien de mesuré sur le réseau actif.
     private var lastRate: ThroughputSample?
     private var samples: [ThroughputSample] = []
