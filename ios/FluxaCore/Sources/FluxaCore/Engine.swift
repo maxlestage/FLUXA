@@ -30,6 +30,8 @@ public final class FluxaEngine {
     private var latency = LatencyWindow(capacity: FluxaEngine.latencyProbes)
     private var pathKind: NetworkKind = .offline
     private var pathOnline = false
+    /// Le nombre de calculs de l'état du forfait, pour les tests qui le mesurent.
+    var planStatusComputations = 0
     /// Le dernier débit calculé. `nil` : rien de mesuré sur le réseau actif.
     private var lastRate: ThroughputSample?
     private var samples: [ThroughputSample] = []
