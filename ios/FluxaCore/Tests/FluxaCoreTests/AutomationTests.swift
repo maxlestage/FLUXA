@@ -26,6 +26,28 @@ final class AutomationTests: XCTestCase {
 
     // MARK: Règles
 
+    func testScheduleWindowsAreComputedOncePerDay() throws {
+        let bench = Bench()
+        let engine = bench.engine
+        try engine.saveRule(schedule("Matin", from: 480, to: 540, profile: nil))
+        try engine.saveRule(schedule("Soir", from: 1_380, to: 1_410, profile: nil))
+        // Une heure d'évaluations, une par seconde, avant les plages : un calcul par plage.
+        for second in 0..<3_600 {
+            go(bench, 6, 0, second)
+            XCTAssertTrue(engine.evaluateAutomations().isEmpty)
+        }
+        XCTAssertEqual(engine.scheduleWindowComputations, 2)
+        // La plage du matin se déclenche toujours à l'heure.
+        go(bench, 8, 0)
+        XCTAssertEqual(messages(engine.evaluateAutomations()).count, 1)
+        // Le lendemain, les occurrences du jour sont recalculées, une fois.
+        go(bench, day: 1, 6, 0)
+        engine.evaluateAutomations()
+        go(bench, day: 1, 6, 1)
+        engine.evaluateAutomations()
+        XCTAssertLessThanOrEqual(engine.scheduleWindowComputations, 4)
+    }
+
     func testRulesKeepTheirOrderAndIdentifiersAreNeverReused() throws {
         let engine = Bench().engine
         XCTAssertTrue(engine.automationRules.isEmpty)
