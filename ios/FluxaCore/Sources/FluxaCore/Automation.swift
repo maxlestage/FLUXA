@@ -173,10 +173,19 @@ extension FluxaEngine {
             changed = true
         }
 
-        // Puis les débuts, dans l'ordre des règles.
+        // Puis les débuts, dans l'ordre des règles. L'état du forfait (cycle, volume du mois,
+        // absences) n'est calculé qu'une fois par évaluation, et seulement si une règle le
+        // demande : déclencher une règle ne change pas ce qui a été consommé.
+        var plan: PlanStatus??
+        let planAtDate = { () -> PlanStatus? in
+            if let plan { return plan }
+            let status = self.planStatus(at: date)
+            plan = .some(status)
+            return status
+        }
         for rule in state.rules where rule.isEnabled {
             guard !state.activations.contains(where: { $0.ruleID == rule.id }),
-                let until = conditionEnd(of: rule, at: date)
+                let until = conditionEnd(of: rule, at: date, plan: planAtDate)
             else { continue }
             new.append(begin(rule, until: until, at: date))
             changed = true
@@ -265,7 +274,7 @@ extension FluxaEngine {
     // MARK: - Conditions
 
     /// Si la condition de la règle est vraie à `date`, l'instant où son effet prendra fin.
-    private func conditionEnd(of rule: AutomationRule, at date: Date) -> Date? {
+    private func conditionEnd(of rule: AutomationRule, at date: Date, plan: () -> PlanStatus?) -> Date? {
         switch rule.trigger {
         case .dailyUsage(let bytes):
             let totals = todayTotals(at: date)
@@ -277,7 +286,7 @@ extension FluxaEngine {
                 startMinute: startMinute, endMinute: endMinute, weekdays: weekdays, at: date)?.end
         case .planUsage(let percent):
             // Sans forfait, la règle attend.
-            guard let status = planStatus(at: date) else { return nil }
+            guard let status = plan() else { return nil }
             // En entiers sur 128 bits : le seuil exact se compare sans arrondi.
             let used = status.usedBytes.multipliedFullWidth(by: 100)
             let threshold = status.plan.allowanceBytes.multipliedFullWidth(by: UInt64(percent))

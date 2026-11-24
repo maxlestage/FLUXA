@@ -462,6 +462,7 @@ extension FluxaEngine {
     }
 
     func planStatus(at date: Date) -> PlanStatus? {
+        planStatusComputations += 1
         guard let plan = state.dataPlan, let cycle = planCycle(resetDay: plan.resetDay, at: date) else {
             return nil
         }
